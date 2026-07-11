@@ -1,0 +1,239 @@
+{
+  "name": "yapper",
+  "displayName": "Yapper",
+  "description": "%extension.description%",
+  "version": "0.1.0",
+  "publisher": "yapper",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "yapper",
+          "title": "Yapper",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "yapper": [
+        {
+          "id": "yapper.chats",
+          "name": "%view.chats.name%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "yapper.refreshChats",
+        "title": "%cmd.refreshChats%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "yapper.searchChats",
+        "title": "%cmd.searchChats%",
+        "icon": "$(search)"
+      },
+      {
+        "command": "yapper.searchGlobal",
+        "title": "%cmd.searchGlobal%",
+        "icon": "$(search-fuzzy)"
+      },
+      {
+        "command": "yapper.openChat",
+        "title": "%cmd.openChat%"
+      },
+      {
+        "command": "yapper.telegram.login",
+        "title": "%cmd.login%"
+      },
+      {
+        "command": "yapper.telegram.logout",
+        "title": "%cmd.logout%",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "yapper.shareSelection",
+        "title": "%cmd.shareSelection%"
+      },
+      {
+        "command": "yapper.shareLocation",
+        "title": "%cmd.shareLocation%"
+      },
+      {
+        "command": "yapper.shareFile",
+        "title": "%cmd.shareFile%"
+      },
+      {
+        "command": "yapper.shareDiff",
+        "title": "%cmd.shareDiff%",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "yapper.shareCommit",
+        "title": "%cmd.shareCommit%",
+        "icon": "$(git-commit)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "yapper.searchChats",
+          "when": "view == yapper.chats && yapper.telegram.connected",
+          "group": "navigation@0"
+        },
+        {
+          "command": "yapper.refreshChats",
+          "when": "view == yapper.chats && yapper.telegram.connected",
+          "group": "navigation@1"
+        },
+        {
+          "command": "yapper.telegram.logout",
+          "when": "view == yapper.chats && yapper.telegram.connected",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "yapper.shareSelection",
+          "when": "editorTextFocus && yapper.telegram.connected",
+          "group": "9_cutcopypaste@10"
+        },
+        {
+          "command": "yapper.shareLocation",
+          "when": "editorTextFocus && yapper.telegram.connected",
+          "group": "9_cutcopypaste@11"
+        },
+        {
+          "command": "yapper.shareFile",
+          "when": "editorTextFocus && yapper.telegram.connected",
+          "group": "9_cutcopypaste@12"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "yapper.shareFile",
+          "when": "yapper.telegram.connected && !explorerResourceIsFolder",
+          "group": "7_modification"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "yapper.shareDiff",
+          "when": "yapper.telegram.connected",
+          "group": "inline"
+        },
+        {
+          "command": "yapper.shareCommit",
+          "when": "yapper.telegram.connected",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "yapper.searchChats",
+          "when": "yapper.telegram.connected"
+        },
+        {
+          "command": "yapper.searchGlobal",
+          "when": "yapper.telegram.connected"
+        },
+        {
+          "command": "yapper.shareSelection",
+          "when": "yapper.telegram.connected"
+        },
+        {
+          "command": "yapper.shareLocation",
+          "when": "yapper.telegram.connected"
+        },
+        {
+          "command": "yapper.shareDiff",
+          "when": "yapper.telegram.connected"
+        },
+        {
+          "command": "yapper.shareCommit",
+          "when": "yapper.telegram.connected"
+        },
+        {
+          "command": "yapper.shareFile",
+          "when": "yapper.telegram.connected"
+        },
+        {
+          "command": "yapper.openChat",
+          "when": "false"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "yapper.chats",
+        "contents": "%welcome.content%",
+        "when": "!yapper.telegram.connected"
+      }
+    ],
+    "configuration": {
+      "title": "%config.title%",
+      "properties": {
+        "yapper.notifications.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.notifications.enabled%"
+        },
+        "yapper.notifications.showPreview": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.notifications.showPreview%"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "yapper.searchChats",
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c",
+        "when": "yapper.telegram.connected"
+      },
+      {
+        "command": "yapper.searchGlobal",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g",
+        "when": "yapper.telegram.connected"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "telegram": "^2.26.22"
+  }
+}

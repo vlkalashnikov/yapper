@@ -1,0 +1,19 @@
+{
+  "extension.description": "Единый мессенджер разработчика для VS Code",
+  "view.chats.name": "Чаты",
+  "cmd.refreshChats": "Yapper: Обновить чаты",
+  "cmd.searchChats": "Yapper: Поиск чатов",
+  "cmd.searchGlobal": "Yapper: Поиск по всем сообщениям",
+  "cmd.openChat": "Yapper: Открыть чат",
+  "cmd.login": "Yapper: Войти в Telegram",
+  "cmd.logout": "Yapper: Выйти из Telegram",
+  "cmd.shareSelection": "Yapper: Отправить код в чат",
+  "cmd.shareLocation": "Yapper: Отправить ссылку на строку в чат",
+  "cmd.shareFile": "Yapper: Отправить файл в чат",
+  "cmd.shareDiff": "Yapper: Отправить git diff в чат",
+  "cmd.shareCommit": "Yapper: Отправить последний коммит в чат",
+  "config.title": "Yapper",
+  "config.notifications.enabled": "Показывать уведомление о новых входящих сообщениях",
+  "config.notifications.showPreview": "Показывать текст сообщения в уведомлении (иначе — только отправитель)",
+  "welcome.content": "Войдите в Telegram, чтобы увидеть свои чаты.\n[Войти в Telegram](command:yapper.telegram.login)"
+}

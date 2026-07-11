@@ -1,0 +1,19 @@
+{
+  "extension.description": "Unified Developer Messenger for VS Code",
+  "view.chats.name": "Chats",
+  "cmd.refreshChats": "Yapper: Refresh Chats",
+  "cmd.searchChats": "Yapper: Search Chats",
+  "cmd.searchGlobal": "Yapper: Search All Messages",
+  "cmd.openChat": "Yapper: Open Chat",
+  "cmd.login": "Yapper: Sign in to Telegram",
+  "cmd.logout": "Yapper: Sign out of Telegram",
+  "cmd.shareSelection": "Yapper: Send Code to Chat",
+  "cmd.shareLocation": "Yapper: Send Line Link to Chat",
+  "cmd.shareFile": "Yapper: Send File to Chat",
+  "cmd.shareDiff": "Yapper: Send Git Diff to Chat",
+  "cmd.shareCommit": "Yapper: Send Latest Commit to Chat",
+  "config.title": "Yapper",
+  "config.notifications.enabled": "Show a notification for new incoming messages",
+  "config.notifications.showPreview": "Show message text in the notification (otherwise only the sender)",
+  "welcome.content": "Sign in to Telegram to see your chats.\n[Sign in to Telegram](command:yapper.telegram.login)"
+}

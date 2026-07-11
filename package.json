@@ -5,12 +5,28 @@
   "version": "0.1.0",
   "publisher": "yapper",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vlkalashnikov/yapper.git"
+  },
+  "homepage": "https://github.com/vlkalashnikov/yapper#readme",
+  "bugs": {
+    "url": "https://github.com/vlkalashnikov/yapper/issues"
+  },
+  "keywords": [
+    "telegram",
+    "messenger",
+    "chat",
+    "gramjs",
+    "developer"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
     "Other"
   ],
+  "icon": "media/icon.png",
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "activationEvents": [
@@ -219,7 +235,7 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run",
-    "package": "vsce package"
+    "package": "npx --yes @vscode/vsce package"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

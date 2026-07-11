@@ -1,7 +1,10 @@
 .vscode/**
 .vscode-test/**
+.claude/**
 src/**
 node_modules/**
+media/icon-marketplace.svg
+yapper-*.vsix
 .gitignore
 .nvmrc
 .eslintrc.json

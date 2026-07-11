@@ -66,14 +66,14 @@ export class TopicTreeItem extends vscode.TreeItem {
 
 /** Tree item for a folder (dialog filter) containing its chats. */
 export class FolderTreeItem extends vscode.TreeItem {
-  constructor(public readonly folder: Folder, expanded = false) {
+  constructor(public readonly folder: Folder, expanded = false, icon = "folder") {
     super(
       folder.title,
       expanded
         ? vscode.TreeItemCollapsibleState.Expanded
         : vscode.TreeItemCollapsibleState.Collapsed
     );
-    this.iconPath = new vscode.ThemeIcon("folder");
+    this.iconPath = new vscode.ThemeIcon(icon);
     this.contextValue = "yapper.folder";
   }
 }
@@ -136,21 +136,45 @@ export class ChatTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     const totalUnread = chats.reduce((n, c) => n + (c.unreadCount ?? 0), 0);
     this._onDidChangeBadge.fire(totalUnread);
 
+    // Archived chats are shown only under a dedicated Archive folder, never in
+    // the main list or custom folders (mirrors Telegram).
+    const active = chats.filter((c) => !c.archived);
+    const archived = chats.filter((c) => c.archived);
+    const archiveNode = archived.length
+      ? new FolderTreeItem(
+          {
+            id: 1,
+            title: vscode.l10n.t("Archived"),
+            chatIds: archived.map((c) => c.id),
+          },
+          false,
+          "archive"
+        )
+      : undefined;
+
     const nonEmpty = folders.filter((f) => f.chatIds.length > 0);
     if (nonEmpty.length === 0) {
-      return chats.map((chat) => new ChatTreeItem(chat));
+      const items: TreeNode[] = active.map((chat) => new ChatTreeItem(chat));
+      if (archiveNode) {
+        items.push(archiveNode);
+      }
+      return items;
     }
 
     // "Все чаты" mirrors Telegram's first tab; it and the custom folders all
-    // start collapsed.
+    // start collapsed. Archive, if any, comes last.
     const allChats: Folder = {
       id: 0,
       title: vscode.l10n.t("All chats"),
-      chatIds: chats.map((c) => c.id),
+      chatIds: active.map((c) => c.id),
     };
-    return [
+    const nodes: TreeNode[] = [
       new FolderTreeItem(allChats),
       ...nonEmpty.map((f) => new FolderTreeItem(f)),
     ];
+    if (archiveNode) {
+      nodes.push(archiveNode);
+    }
+    return nodes;
   }
 }

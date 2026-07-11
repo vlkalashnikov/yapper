@@ -19,6 +19,8 @@ export interface Chat {
   canSend?: boolean;
   /** True when notifications for this chat are muted in Telegram. */
   muted?: boolean;
+  /** True when the chat is in Telegram's Archive (folder id 1). */
+  archived?: boolean;
 }
 
 /** A forum topic (sub-thread) inside a forum group. */

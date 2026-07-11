@@ -196,6 +196,7 @@ export class TelegramProvider implements MessengerProvider {
           dialog.entity instanceof Api.Channel && dialog.entity.forum === true,
         canSend: canSendTo(dialog.entity),
         muted,
+        archived: dialog.archived,
       });
     }
     return chats;
@@ -586,6 +587,9 @@ export class TelegramProvider implements MessengerProvider {
 
       const chatIds: string[] = [];
       for (const chat of chats) {
+        if (chat.archived) {
+          continue; // archived chats belong only to the Archive folder
+        }
         const entity = this.entities.get(chat.id);
         if (!entity) {
           continue;

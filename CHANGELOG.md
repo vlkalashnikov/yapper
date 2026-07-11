@@ -3,25 +3,21 @@
 All notable changes to the Yapper extension are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.0.0] - 2026-07-12
 
-### Added
-
-- Archived chats are shown under a dedicated **Archive** folder in the chat
-  tree, excluded from "All chats" and custom folders (mirrors Telegram).
-- First unit-test suite (Vitest) for `MockProvider` and `TelegramStorage`.
-
-## [0.1.0] - 2026-07-12
-
-Initial release. Telegram client integrated into VS Code.
+First public release — a Telegram client integrated into VS Code.
 
 ### Added
 
 - QR-code sign-in with 2FA support; session persisted in SecretStorage.
-- Chat list with folders and forum topics; unread badge and toast notifications.
-- Realtime messaging: history with pagination, send, edit/delete, read receipts.
-- Media: image previews, lightbox for images/video, file download.
-- Search: within a chat, and global across all chats; contact/chat profile card.
+- Chat list with Telegram folders, forum topics, and a dedicated **Archive**
+  folder; unread badge and toast notifications.
+- Realtime messaging: history with pagination, send, reply, edit/delete,
+  read receipts, and `@`-mention autocomplete.
+- Media: image previews, a lightbox for images/video, and file download.
+- Search: within a chat and globally across all chats; contact/chat/channel
+  profile cards with shared media and files.
 - Editor integration: share selection, file, location (`path:line`), git diff,
   and commit into the open chat; open `path:line` references back in the editor.
 - Localization: English (base) and Russian.
+- First unit-test suite (Vitest) for `MockProvider` and `TelegramStorage`.

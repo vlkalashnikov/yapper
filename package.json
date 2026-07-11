@@ -2,7 +2,7 @@
   "name": "yapper",
   "displayName": "Yapper",
   "description": "%extension.description%",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "publisher": "yapper",
   "license": "MIT",
   "repository": {

@@ -27,6 +27,10 @@
     "Other"
   ],
   "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#2AABEE",
+    "theme": "dark"
+  },
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "activationEvents": [

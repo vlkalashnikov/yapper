@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+import type * as vscode from "vscode";
 
 const KEY_SESSION = "yapper.telegram.session";
 const KEY_API_ID = "yapper.telegram.apiId";

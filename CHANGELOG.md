@@ -5,7 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [1.0.0] - 2026-07-12
 
-First public release — a Telegram client integrated into VS Code.
+First public release — a unified developer messenger for VS Code, with full
+Telegram support (more providers on the roadmap).
 
 ### Added
 

@@ -8,6 +8,7 @@ import {
   jidUser,
   mapStatus,
   messageText,
+  muteActive,
   toMessage,
   toNum,
 } from "./helpers";
@@ -89,6 +90,24 @@ describe("mapStatus", () => {
     expect(mapStatus(5)).toBe("read"); // PLAYED
     expect(mapStatus(null)).toBeUndefined();
     expect(mapStatus(undefined)).toBeUndefined();
+  });
+});
+
+describe("muteActive", () => {
+  const now = 1_700_000_000_000; // ms
+  it("treats 0/absent as not muted", () => {
+    expect(muteActive(0, now)).toBe(false);
+  });
+  it("treats a negative end time as muted forever", () => {
+    expect(muteActive(-1, now)).toBe(true);
+  });
+  it("compares a seconds timestamp (normalized to ms)", () => {
+    expect(muteActive(now / 1000 + 3600, now)).toBe(true); // 1h ahead
+    expect(muteActive(now / 1000 - 3600, now)).toBe(false); // 1h past
+  });
+  it("compares a millisecond timestamp as-is", () => {
+    expect(muteActive(now + 3_600_000, now)).toBe(true);
+    expect(muteActive(now - 3_600_000, now)).toBe(false);
   });
 });
 

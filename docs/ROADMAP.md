@@ -107,7 +107,9 @@ Public Release
         `fetchMessageHistory` (ADR-011);
   - [x] Read-receipts — галочки ✓/✓✓ для исходящих в личке через Baileys
         `messages.update` (ADR-012);
-  - [ ] Медиа, поиск, профили, mute (см. NOT_NOW / ADR-010) — **в работе**.
+  - [x] Mute — read-only: уважаем мьюты WhatsApp (тихие чаты не пикают
+        тостами); тумблер — позже с карточкой профиля (ADR-013);
+  - [ ] Медиа, поиск, профили (см. NOT_NOW / ADR-010) — **в работе**.
 
 ---
 

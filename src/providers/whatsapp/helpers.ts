@@ -62,6 +62,21 @@ export function mapStatus(
   return undefined;
 }
 
+/** Whether a chat's mute is currently active. WhatsApp's `muteEndTime` is 0 (or
+ *  absent) when not muted, a future timestamp when muted, or negative for "muted
+ *  forever". The timestamp may be in seconds or ms depending on the source, so
+ *  it's normalized before comparing against `nowMs`. */
+export function muteActive(muteEndTime: number, nowMs: number): boolean {
+  if (!muteEndTime) {
+    return false;
+  }
+  if (muteEndTime < 0) {
+    return true;
+  }
+  const endMs = muteEndTime < 1e12 ? muteEndTime * 1000 : muteEndTime;
+  return endMs > nowMs;
+}
+
 /** Plain text of a WhatsApp message, or "" if it carries none (media/other). */
 export function messageText(m: WAMessage): string {
   const msg = m.message;

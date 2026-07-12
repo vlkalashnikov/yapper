@@ -21,6 +21,7 @@ import {
   isRenderable,
   isSupportedJid,
   mapStatus,
+  muteActive,
   toMessage,
   toNum,
 } from "./helpers";
@@ -44,6 +45,9 @@ interface StoredChat {
   unreadCount: number;
   /** Newest-activity time, ms. */
   ts: number;
+  /** WhatsApp's mute-end time (0/absent = not muted, future = muted, <0 =
+   *  forever). Read-only: honored for notification suppression. */
+  mutedUntil?: number;
 }
 
 /** Normalized contact, for display-name resolution. */
@@ -173,6 +177,7 @@ export class WhatsAppProvider implements Messenger {
           lastMessage: last?.text || undefined,
           unreadCount: c.unreadCount,
           canSend: true,
+          muted: muteActive(c.mutedUntil ?? 0, Date.now()),
         },
         ts,
       });
@@ -245,8 +250,9 @@ export class WhatsAppProvider implements Messenger {
     return msg ?? toMessage(chatId, sent, this.mediaLabel());
   }
 
-  isChatMuted(): boolean {
-    return false; // mute state not tracked in the text-only MVP
+  isChatMuted(chatId: string): boolean {
+    const c = this.chats.get(this.canonical(chatId));
+    return c ? muteActive(c.mutedUntil ?? 0, Date.now()) : false;
   }
 
   dispose(): void {
@@ -558,6 +564,7 @@ export class WhatsAppProvider implements Messenger {
         name: pnChat?.name ?? lidChat.name,
         unreadCount: Math.max(pnChat?.unreadCount ?? 0, lidChat.unreadCount),
         ts: Math.max(pnChat?.ts ?? 0, lidChat.ts),
+        mutedUntil: pnChat?.mutedUntil ?? lidChat.mutedUntil,
       });
       this.chats.delete(lid);
     }
@@ -591,6 +598,7 @@ export class WhatsAppProvider implements Messenger {
     name?: string | null;
     unreadCount?: number | null;
     conversationTimestamp?: number | { toNumber(): number } | null;
+    muteEndTime?: number | { toNumber(): number } | null;
   }): void {
     if (!c.id) {
       return;
@@ -605,6 +613,11 @@ export class WhatsAppProvider implements Messenger {
         c.conversationTimestamp !== null && c.conversationTimestamp !== undefined
           ? toNum(c.conversationTimestamp) * 1000
           : prev?.ts ?? 0,
+      // Partial updates may omit muteEndTime — preserve the previous value then.
+      mutedUntil:
+        c.muteEndTime !== null && c.muteEndTime !== undefined
+          ? toNum(c.muteEndTime)
+          : prev?.mutedUntil,
     });
   }
 

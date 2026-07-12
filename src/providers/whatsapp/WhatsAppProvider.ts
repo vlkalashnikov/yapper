@@ -64,6 +64,7 @@ const MESSAGE_CAP = 60;
 export class WhatsAppProvider implements Messenger {
   readonly id = "whatsapp";
   readonly name = "WhatsApp";
+  readonly beta = true; // text-only MVP — tagged BETA in the UI
 
   private sock?: WASocket;
   private open = false;

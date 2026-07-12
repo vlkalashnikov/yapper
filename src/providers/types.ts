@@ -165,6 +165,9 @@ export interface MessengerProvider {
   readonly id: string;
   /** Human-readable name shown in the UI. */
   readonly name: string;
+  /** True for providers that aren't feature-complete yet — the UI tags them
+   *  "BETA" (e.g. WhatsApp is text-only). */
+  readonly beta?: boolean;
   /** Page size of getMessages/getMessagesBefore/getMessagesAfter, so the UI can
    *  detect end-of-history: a short page means there are no more messages. */
   readonly historyPageSize?: number;

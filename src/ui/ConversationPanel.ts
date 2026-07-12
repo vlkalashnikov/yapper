@@ -43,7 +43,9 @@ export class ConversationPanel {
     this.currentChat = chat;
     const panel = this.ensurePanel();
     // The chat name lives in the webview header; the tab shows the provider.
-    panel.title = this.provider.name;
+    panel.title = this.provider.beta
+      ? `${this.provider.name} (BETA)`
+      : this.provider.name;
     panel.reveal(panel.viewColumn ?? vscode.ViewColumn.Active, false);
 
     // Switch to the target chat immediately with a spinner — the old chat must

@@ -19,7 +19,7 @@ straight into a chat.
 | Messenger | Status |
 | --- | --- |
 | **Telegram** | ✅ Available |
-| **WhatsApp** | ✅ Available (text-only) |
+| **WhatsApp** | ✅ Available — BETA (text-only) |
 | Slack | 🧭 Planned |
 | Discord | 🧭 Planned |
 | Microsoft Teams | 🧭 Planned |

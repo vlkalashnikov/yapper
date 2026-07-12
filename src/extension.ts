@@ -247,7 +247,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("yapper.switchMessenger", async () => {
       const pick = await vscode.window.showQuickPick(
         providers.map((p) => ({
-          label: `${p === active ? "$(check) " : ""}${p.name}`,
+          label: `${p === active ? "$(check) " : ""}${p.name}${
+            p.beta ? " $(beaker) BETA" : ""
+          }`,
           description: p.connected
             ? vscode.l10n.t("connected")
             : vscode.l10n.t("not signed in"),

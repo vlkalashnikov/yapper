@@ -4,9 +4,11 @@ import {
   chatTitle,
   isGroupJid,
   isRenderable,
+  extFromMime,
   isSupportedJid,
   jidUser,
   mapStatus,
+  mediaInfo,
   messageText,
   mimeOf,
   muteActive,
@@ -127,6 +129,42 @@ describe("mapStatus", () => {
   });
 });
 
+describe("mediaInfo", () => {
+  it("classifies video vs gif and carries the caption", () => {
+    expect(mediaInfo({ videoMessage: { caption: "clip" } })).toMatchObject({
+      hasImage: true,
+      mediaKind: "video",
+      caption: "clip",
+    });
+    expect(mediaInfo({ videoMessage: { gifPlayback: true } })).toMatchObject({
+      mediaKind: "gif",
+    });
+  });
+  it("maps a voice note to a file chip", () => {
+    expect(mediaInfo({ audioMessage: { ptt: true } }).file?.name).toBe(
+      "Voice message.ogg"
+    );
+  });
+  it("unwraps a container before classifying", () => {
+    expect(
+      mediaInfo({ ephemeralMessage: { message: { stickerMessage: {} } } })
+    ).toMatchObject({ hasImage: true, mediaKind: "sticker" });
+  });
+  it("is empty for plain text", () => {
+    expect(mediaInfo({ conversation: "hi" })).toEqual({});
+  });
+});
+
+describe("extFromMime", () => {
+  it("derives extensions, stripping params and x- prefix", () => {
+    expect(extFromMime("image/jpeg")).toBe("jpeg");
+    expect(extFromMime("video/mp4")).toBe("mp4");
+    expect(extFromMime("audio/ogg; codecs=opus")).toBe("ogg");
+    expect(extFromMime("video/quicktime")).toBe("mov");
+    expect(extFromMime("garbage")).toBe("");
+  });
+});
+
 describe("mimeOf", () => {
   it("maps source/text files to text/plain (open inline)", () => {
     expect(mimeOf("main.ts")).toBe("text/plain");
@@ -231,13 +269,25 @@ describe("toMessage", () => {
     expect(group.status).toBeUndefined();
   });
 
-  it("uses the media placeholder when there is no text", () => {
+  it("maps media to hasImage/mediaKind (not the text placeholder)", () => {
     const msg = toMessage(
       "1@s.whatsapp.net",
-      wa({ ...base, message: { imageMessage: {} } }),
+      wa({ ...base, message: { imageMessage: { caption: "look" } } }),
       "[media]"
     );
-    expect(msg.text).toBe("[media]");
+    expect(msg.hasImage).toBe(true);
+    expect(msg.mediaKind).toBe("photo");
+    expect(msg.text).toBe("look"); // caption becomes the text
+  });
+
+  it("maps a document to a file chip", () => {
+    const msg = toMessage(
+      "1@s.whatsapp.net",
+      wa({ ...base, message: { documentMessage: { fileName: "a.pdf", fileLength: 1234 } } }),
+      "[media]"
+    );
+    expect(msg.file).toEqual({ name: "a.pdf", size: 1234 });
+    expect(msg.text).toBe("");
   });
 
   it("falls back to the group participant for the author", () => {

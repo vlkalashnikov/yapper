@@ -111,7 +111,11 @@ Public Release
         тостами); тумблер — позже с карточкой профиля (ADR-013);
   - [x] Editor-парити — `sendCode`/`sendFile`: Share Selection/Diff/File
         работают на WhatsApp (код — triple-backtick, файл — документ) (ADR-014);
-  - [ ] Медиа, поиск, профили (см. NOT_NOW / ADR-010) — **в работе**.
+  - [x] Медиа (входящие) — превью из `jpegThumbnail`, скачивание/открытие
+        через `downloadMediaMessage`; «[media]» заменены реальными
+        картинками/файлами; медиа-метки в списке чатов (ADR-016);
+  - [ ] Аватары, shared-media, поиск, профили (см. NOT_NOW / ADR-010) —
+        **в работе**.
 
 ---
 

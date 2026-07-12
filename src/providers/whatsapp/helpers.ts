@@ -146,6 +146,77 @@ export function messageText(m: WAMessage): string {
   return msg.conversation ?? msg.extendedTextMessage?.text ?? "";
 }
 
+/** Media descriptor of a message (unwrapped): how the UI should render it —
+ *  an inline image/thumbnail (photo/video/gif/sticker) or a file chip
+ *  (document/audio) — plus any caption. Empty object for plain text. */
+export interface MediaInfo {
+  hasImage?: boolean;
+  mediaKind?: "photo" | "video" | "gif" | "sticker";
+  file?: { name: string; size?: number };
+  caption?: string;
+}
+
+export function mediaInfo(message: WAMessage["message"]): MediaInfo {
+  const c = unwrapContent(message);
+  if (!c) {
+    return {};
+  }
+  if (c.imageMessage) {
+    return { hasImage: true, mediaKind: "photo", caption: c.imageMessage.caption ?? undefined };
+  }
+  if (c.videoMessage) {
+    return {
+      hasImage: true,
+      mediaKind: c.videoMessage.gifPlayback ? "gif" : "video",
+      caption: c.videoMessage.caption ?? undefined,
+    };
+  }
+  if (c.stickerMessage) {
+    return { hasImage: true, mediaKind: "sticker" };
+  }
+  if (c.documentMessage) {
+    const d = c.documentMessage;
+    return {
+      file: { name: d.fileName || "file", size: toNum(d.fileLength) || undefined },
+      caption: d.caption ?? undefined,
+    };
+  }
+  if (c.audioMessage) {
+    const a = c.audioMessage;
+    return {
+      file: {
+        name: a.ptt ? "Voice message.ogg" : "Audio",
+        size: toNum(a.fileLength) || undefined,
+      },
+    };
+  }
+  return {};
+}
+
+/** Extension (without the dot) from a filename, or "" if it has none. */
+export function extOf(name: string): string {
+  const i = name.lastIndexOf(".");
+  return i > 0 ? name.slice(i + 1) : "";
+}
+
+/** A file extension (no dot) for a MIME type, or "" if it can't be derived. */
+export function extFromMime(mime: string): string {
+  const slash = mime.indexOf("/");
+  if (slash < 0) {
+    return "";
+  }
+  const sub = mime.slice(slash + 1).toLowerCase().replace(/^x-/, "");
+  const map: Record<string, string> = {
+    quicktime: "mov",
+    matroska: "mkv",
+    mpeg: "mp3",
+    "mp4a-latm": "m4a",
+    "vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  };
+  const base = sub.replace(/[^a-z0-9].*$/, "");
+  return map[sub] ?? map[base] ?? base;
+}
+
 /** Whether a message has content worth rendering (text or a known media kind);
  *  filters out pure protocol messages (key exchanges, receipts, …). */
 export function isRenderable(m: WAMessage): boolean {
@@ -184,7 +255,8 @@ export function chatTitle(
 }
 
 /** Map a WhatsApp message into the provider-agnostic model. `mediaPlaceholder`
- *  (localized) is used as the text when the message has no plain text. */
+ *  (localized) is a last-resort text for renderable content we don't recognize;
+ *  known media instead surfaces via hasImage/mediaKind/file (+ its caption). */
 export function toMessage(
   chatId: string,
   m: WAMessage,
@@ -192,6 +264,8 @@ export function toMessage(
 ): Message {
   const outgoing = m.key.fromMe === true;
   const text = messageText(m);
+  const media = mediaInfo(m.message);
+  const hasMedia = !!(media.hasImage || media.file);
   const senderId = m.key.participant ?? undefined;
   return {
     id: m.key.id ?? "",
@@ -200,9 +274,14 @@ export function toMessage(
       ? ""
       : m.pushName || jidUser(senderId ?? m.key.remoteJid ?? chatId),
     senderId: outgoing ? undefined : senderId,
-    text: text || (m.message ? mediaPlaceholder : ""),
+    // Caption for media; "" when media renders on its own; placeholder only for
+    // unrecognized renderable content.
+    text: text || media.caption || (hasMedia ? "" : m.message ? mediaPlaceholder : ""),
     timestamp: toNum(m.messageTimestamp) * 1000,
     outgoing,
+    hasImage: media.hasImage,
+    mediaKind: media.mediaKind,
+    file: media.file,
     // Read receipts: only for our own messages in 1:1 chats (mirrors Telegram).
     status:
       outgoing && !isGroupJid(chatId) ? mapStatus(m.status) : undefined,

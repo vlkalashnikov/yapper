@@ -4,6 +4,7 @@ import * as path from "path";
 import makeWASocket, {
   Browsers,
   DisconnectReason,
+  downloadMediaMessage,
   useMultiFileAuthState,
 } from "@whiskeysockets/baileys";
 import type {
@@ -12,11 +13,13 @@ import type {
   WAMessageKey,
   WASocket,
 } from "@whiskeysockets/baileys";
-import { Chat, Message, Messenger } from "../types";
+import { Chat, MediaFile, Message, Messenger } from "../types";
 import { QrLoginPanel, QrLoginText } from "../../ui/QrLoginPanel";
 import { AuthCancelled } from "../../util/AuthCancelled";
 import {
   chatTitle,
+  extFromMime,
+  extOf,
   isGroupJid,
   isRenderable,
   isSupportedJid,
@@ -25,6 +28,7 @@ import {
   muteActive,
   toMessage,
   toNum,
+  unwrapContent,
 } from "./helpers";
 
 // Baileys logs verbosely via pino; a silent logger keeps the extension host clean.
@@ -103,6 +107,9 @@ export class WhatsAppProvider implements Messenger {
   private readonly lidToPn = new Map<string, string>();
   /** Ids we sent ourselves, to skip the realtime echo. */
   private readonly sentIds = new Set<string>();
+  /** Raw media messages, by message id, so media can be downloaded lazily.
+   *  In-memory only (media keys aren't persisted) — like Telegram's cache. */
+  private readonly rawMessages = new Map<string, WAMessage>();
   /** Pending on-demand history fetches: chatId -> resolver, released when the
    *  requested older messages arrive (or the request times out). */
   private readonly historyWaiters = new Map<
@@ -204,7 +211,7 @@ export class WhatsAppProvider implements Messenger {
         chat: {
           id: jid,
           title: chatTitle(jid, c.name, this.contacts.get(jid)),
-          lastMessage: last?.text || undefined,
+          lastMessage: last ? this.previewOf(last) || undefined : undefined,
           unreadCount: c.unreadCount,
           canSend: true,
           muted: muteActive(c.mutedUntil ?? 0, Date.now()),
@@ -344,6 +351,117 @@ export class WhatsAppProvider implements Messenger {
     });
     this.schedulePersist();
     return msg;
+  }
+
+  /** A message's inline thumbnail as a data URL (lazy, called by the UI for
+   *  messages with hasImage). Uses the embedded jpegThumbnail; stickers have
+   *  none, so the (small) full sticker is downloaded instead. */
+  async getMedia(_chatId: string, messageId: string): Promise<string | undefined> {
+    const raw = this.rawMessages.get(messageId);
+    const c = raw && unwrapContent(raw.message);
+    if (!raw || !c) {
+      return undefined;
+    }
+    const thumb =
+      c.imageMessage?.jpegThumbnail ??
+      c.videoMessage?.jpegThumbnail ??
+      c.documentMessage?.jpegThumbnail;
+    if (thumb && thumb.length) {
+      return "data:image/jpeg;base64," + Buffer.from(thumb).toString("base64");
+    }
+    if (c.stickerMessage) {
+      const data = await this.download(raw);
+      if (data) {
+        const mime = c.stickerMessage.mimetype || "image/webp";
+        return `data:${mime};base64,` + Buffer.from(data).toString("base64");
+      }
+    }
+    return undefined;
+  }
+
+  /** Download a message's full media for opening in a viewer or saving. */
+  async getMediaFile(
+    _chatId: string,
+    messageId: string
+  ): Promise<MediaFile | undefined> {
+    const raw = this.rawMessages.get(messageId);
+    const c = raw && unwrapContent(raw.message);
+    if (!raw || !c) {
+      return undefined;
+    }
+    const data = await this.download(raw);
+    if (!data) {
+      return undefined;
+    }
+    const make = (
+      mime: string,
+      fallbackExt: string,
+      kind: MediaFile["kind"],
+      filename?: string
+    ): MediaFile => {
+      const ext = (filename && extOf(filename)) || extFromMime(mime) || fallbackExt;
+      return { data, filename: filename || `file.${ext}`, extension: ext, mime, kind };
+    };
+    if (c.imageMessage) {
+      return make(c.imageMessage.mimetype || "image/jpeg", "jpg", "image");
+    }
+    if (c.videoMessage) {
+      return make(c.videoMessage.mimetype || "video/mp4", "mp4", "video");
+    }
+    if (c.stickerMessage) {
+      return make(c.stickerMessage.mimetype || "image/webp", "webp", "image", "sticker.webp");
+    }
+    if (c.documentMessage) {
+      const d = c.documentMessage;
+      return make(d.mimetype || "application/octet-stream", "bin", "file", d.fileName || undefined);
+    }
+    if (c.audioMessage) {
+      const ext = extFromMime(c.audioMessage.mimetype || "audio/ogg") || "ogg";
+      return make(
+        c.audioMessage.mimetype || "audio/ogg",
+        "ogg",
+        "file",
+        `${c.audioMessage.ptt ? "voice" : "audio"}.${ext}`
+      );
+    }
+    return undefined;
+  }
+
+  /** Download a raw media message to a Buffer, re-uploading if its URL expired. */
+  private async download(raw: WAMessage): Promise<Buffer | undefined> {
+    if (!this.sock) {
+      return undefined;
+    }
+    try {
+      return await downloadMediaMessage(raw, "buffer", {}, {
+        reuploadRequest: this.sock.updateMediaMessage,
+        logger: silentLogger as never,
+      });
+    } catch (err) {
+      console.error("[Yapper] WhatsApp media download failed:", err);
+      return undefined;
+    }
+  }
+
+  /** One-line chat-list preview: text, else a localized media/file label. */
+  private previewOf(m: Message): string {
+    if (m.text) {
+      return m.text;
+    }
+    if (m.file) {
+      return `📎 ${m.file.name}`;
+    }
+    switch (m.mediaKind) {
+      case "photo":
+        return vscode.l10n.t("🖼 Photo");
+      case "video":
+      case "gif":
+        return vscode.l10n.t("🎥 Video");
+      case "sticker":
+        return vscode.l10n.t("🖼 Sticker");
+      default:
+        return "";
+    }
   }
 
   isChatMuted(chatId: string): boolean {
@@ -740,7 +858,12 @@ export class WhatsAppProvider implements Messenger {
     if (!jid || !isSupportedJid(jid) || !isRenderable(m)) {
       return null;
     }
-    return this.insertMessage(toMessage(this.canonical(jid), m, this.mediaLabel()));
+    const msg = toMessage(this.canonical(jid), m, this.mediaLabel());
+    // Keep the raw message so its media can be downloaded lazily.
+    if (msg.id && (msg.hasImage || msg.file)) {
+      this.rawMessages.set(msg.id, m);
+    }
+    return this.insertMessage(msg);
   }
 
   /** Insert an already-mapped message into its chat (oldest-first, deduped by
@@ -893,6 +1016,7 @@ export class WhatsAppProvider implements Messenger {
     this.messages.clear();
     this.lidToPn.clear();
     this.sentIds.clear();
+    this.rawMessages.clear();
   }
 
   /** Whether a saved auth session exists on disk. */

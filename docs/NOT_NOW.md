@@ -15,7 +15,8 @@
 
 - Единое дерево нескольких провайдеров одновременно + `providerId` в моделях
   (ADR-009).
-- WhatsApp: медиа, поиск, профили (ADR-010). Тумблер mute — с карточкой
-  профиля (mute уже уважается read-only, ADR-013).
+- WhatsApp: аватары, shared-media, поиск, профили (ADR-010). Тумблер mute — с
+  карточкой профиля (mute уже уважается read-only, ADR-013).
   Сделаны в v1.1: пагинация истории (ADR-011), read-receipts (ADR-012),
-  read-only mute (ADR-013), editor-парити `sendCode`/`sendFile` (ADR-014).
+  read-only mute (ADR-013), editor-парити `sendCode`/`sendFile` (ADR-014),
+  входящие медиа (ADR-016).

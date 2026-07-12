@@ -41,6 +41,27 @@ export function jidUser(jid: string): string {
   return jid.split("@")[0].split(":")[0];
 }
 
+/** Map WhatsApp's delivery status (WebMessageInfo.Status enum) to the model's
+ *  two-state tick. WhatsApp shows ✓✓ already on delivery (and READ doesn't
+ *  reliably reach a linked device), so: SERVER_ACK (2) → "sent" (✓);
+ *  DELIVERY_ACK/READ/PLAYED (3/4/5) → "read" (✓✓); ERROR/PENDING (0/1) →
+ *  undefined (no mark). */
+export function mapStatus(
+  status: number | null | undefined
+): "sent" | "read" | undefined {
+  if (status === null || status === undefined) {
+    return undefined;
+  }
+  const s = Number(status);
+  if (s >= 3) {
+    return "read";
+  }
+  if (s === 2) {
+    return "sent";
+  }
+  return undefined;
+}
+
 /** Plain text of a WhatsApp message, or "" if it carries none (media/other). */
 export function messageText(m: WAMessage): string {
   const msg = m.message;
@@ -107,5 +128,8 @@ export function toMessage(
     text: text || (m.message ? mediaPlaceholder : ""),
     timestamp: toNum(m.messageTimestamp) * 1000,
     outgoing,
+    // Read receipts: only for our own messages in 1:1 chats (mirrors Telegram).
+    status:
+      outgoing && !isGroupJid(chatId) ? mapStatus(m.status) : undefined,
   };
 }

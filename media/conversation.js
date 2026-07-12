@@ -19,6 +19,21 @@
   const replyBar = document.getElementById("reply-bar");
   const scrollDownBtn = document.getElementById("scroll-down");
   const olderLoader = document.getElementById("older-loader");
+
+  // Brief "Copied" toast, shown after copying code / an inline fragment.
+  let copyToast = null;
+  let copyToastTimer = null;
+  function showCopied() {
+    if (!copyToast) {
+      copyToast = document.createElement("div");
+      copyToast.id = "copy-toast";
+      document.body.appendChild(copyToast);
+    }
+    copyToast.textContent = L.copied || "Copied";
+    copyToast.classList.add("show");
+    clearTimeout(copyToastTimer);
+    copyToastTimer = setTimeout(() => copyToast.classList.remove("show"), 1400);
+  }
   const composer = document.getElementById("composer");
   const readonlyBar = document.getElementById("readonly");
   const lightbox = document.getElementById("lightbox");
@@ -267,7 +282,16 @@
       } else {
         el.append(node);
       }
-      node = el;
+      // Hover copy button (Claude Code style): copies the raw code to clipboard.
+      const wrap = document.createElement("div");
+      wrap.className = "code-wrap";
+      const copy = document.createElement("button");
+      copy.type = "button";
+      copy.className = "code-copy";
+      copy.textContent = L.copy || "Copy";
+      copy.dataset.code = slice;
+      wrap.append(copy, el);
+      node = wrap;
     } else if (has("code")) {
       const el = document.createElement("code");
       el.append(node);
@@ -826,6 +850,12 @@
     currentChatId = chat.id;
     chatAvatar = null;
     lastDay = null;
+    // Reset pagination state so a stale loader from the previous chat doesn't
+    // linger (e.g. a second spinner over "Loading messages…").
+    setLoadingOlder(false);
+    hasMoreOlder = true;
+    loadingNewer = false;
+    hasMoreNewer = false;
     setHeader(chat);
     const spinner = document.createElement("div");
     spinner.className = "spinner";
@@ -1410,6 +1440,19 @@
 
   // Clicks on links open externally; clicks on images open the full media.
   document.addEventListener("click", (e) => {
+    const copyBtn = e.target.closest?.("button.code-copy");
+    if (copyBtn) {
+      vscode.postMessage({ type: "copy", text: copyBtn.dataset.code });
+      showCopied();
+      return;
+    }
+    // Click an inline formatted fragment (inline code) → copy just that text.
+    const inlineCode = e.target.closest?.(".msg .text code");
+    if (inlineCode && (window.getSelection?.()?.isCollapsed ?? true)) {
+      vscode.postMessage({ type: "copy", text: inlineCode.textContent });
+      showCopied();
+      return;
+    }
     const spoiler = e.target.closest?.(".spoiler:not(.revealed)");
     if (spoiler) {
       spoiler.classList.add("revealed");

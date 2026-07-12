@@ -266,6 +266,9 @@ export class ConversationPanel {
         void vscode.window.showInformationMessage(
           vscode.l10n.t("Yapper: invite link copied")
         );
+      } else if (msg.type === "copy" && msg.text) {
+        // Silent clipboard write — the webview button gives inline feedback.
+        await vscode.env.clipboard.writeText(msg.text);
       } else if (msg.type === "openLink" && msg.url) {
         await this.handleLink(msg.url);
       } else if (msg.type === "openMention" && msg.query) {
@@ -660,6 +663,8 @@ export class ConversationPanel {
       filesTab: vscode.l10n.t("Files"),
       nothingHere: vscode.l10n.t("Nothing here yet"),
       copyInvite: vscode.l10n.t("Copy invite link"),
+      copy: vscode.l10n.t("Copy"),
+      copied: vscode.l10n.t("Copied"),
       photo: vscode.l10n.t("🖼 Photo"),
       video: vscode.l10n.t("🎥 Video"),
       gif: vscode.l10n.t("🎬 GIF"),

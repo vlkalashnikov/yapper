@@ -141,9 +141,22 @@ describe("monospaceBlock", () => {
     expect(r.text).toBe("line1\nline2");
     expect(r.entities?.[0].length).toBe(11);
   });
-  it("leaves plain text (and partial backticks) untouched", () => {
+  it("leaves plain text (and single backticks) untouched", () => {
     expect(monospaceBlock("hello")).toEqual({ text: "hello" });
     expect(monospaceBlock("use `x` here")).toEqual({ text: "use `x` here" });
+  });
+  it("marks an inline fragment as code, stripping the backticks", () => {
+    const r = monospaceBlock("привет ```мир```, как дела");
+    expect(r.text).toBe("привет мир, как дела");
+    expect(r.entities).toEqual([{ type: "code", offset: 7, length: 3 }]);
+  });
+  it("marks multiple inline fragments", () => {
+    const r = monospaceBlock("```a``` and ```bb```");
+    expect(r.text).toBe("a and bb");
+    expect(r.entities).toEqual([
+      { type: "code", offset: 0, length: 1 },
+      { type: "code", offset: 6, length: 2 },
+    ]);
   });
 });
 

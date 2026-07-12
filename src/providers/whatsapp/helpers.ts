@@ -254,22 +254,37 @@ export function chatTitle(
   );
 }
 
-/** WhatsApp renders monospace/code with triple backticks. When a whole message
- *  is wrapped in them (Share Code, or code from another client), strip them and
- *  mark it as a `pre` block so it renders as a code block rather than showing
- *  literal backticks. */
+/** WhatsApp marks monospace/code with triple backticks. Strip them and mark the
+ *  spans so they render formatted (not as literal backticks): a whole-message
+ *  wrap becomes a `pre` block (Share Code, code from another client); inline
+ *  ```…``` fragments within a sentence become inline `code`. */
 export function monospaceBlock(text: string): {
   text: string;
   entities?: MessageEntity[];
 } {
-  const m = /^```\n?([\s\S]+?)\n?```$/.exec(text);
-  if (m && m[1].length) {
+  // Whole message wrapped (and no stray backticks inside) → a code block.
+  const full = /^```\n?([\s\S]+?)\n?```$/.exec(text);
+  if (full && full[1].length && !full[1].includes("```")) {
     return {
-      text: m[1],
-      entities: [{ type: "pre", offset: 0, length: m[1].length }],
+      text: full[1],
+      entities: [{ type: "pre", offset: 0, length: full[1].length }],
     };
   }
-  return { text };
+  // Otherwise, inline ```…``` fragments → inline code (offsets in the stripped
+  // text, UTF-16 units).
+  const entities: MessageEntity[] = [];
+  const re = /```([^`]+?)```/g;
+  let out = "";
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    out += text.slice(last, m.index);
+    entities.push({ type: "code", offset: out.length, length: m[1].length });
+    out += m[1];
+    last = m.index + m[0].length;
+  }
+  out += text.slice(last);
+  return entities.length ? { text: out, entities } : { text };
 }
 
 /** Map a WhatsApp message into the provider-agnostic model. `mediaPlaceholder`

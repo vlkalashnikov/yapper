@@ -475,10 +475,21 @@ Selection/Diff/File бросали «not supported»).
 
 Решение
 
-- `sock.profilePictureUrl(jid, "preview")` → URL миниатюры → `fetch` (глобальный,
-  Node 20) → data URL;
-- кэш `avatars` по jid, **включая промахи** (undefined), чтобы чат без фото не
-  перезапрашивался каждое открытие; чистится в `clearStore`.
+- источник фото: сначала `Contact.imgUrl` из синка (надёжно, без запроса),
+  иначе `sock.profilePictureUrl(jid, "preview", timeout)` → `fetch` → data URL;
+- кэш `avatars` по jid, **включая промахи**, чтобы флейковое фото не
+  перезапрашивалось каждое открытие; свежий `imgUrl` сбрасывает кэш
+  (`storeContact`); чистится в `clearStore`;
+- аватар грузится **off the critical path**: `ConversationPanel` постит `load`
+  сразу, а фото стримит в шапку отдельным `headerAvatar` — медленный/зависший
+  запрос не блокирует «loading messages».
+
+Ограничение (проверено на живом аккаунте)
+
+- `profilePictureUrl` для **1:1 ненадёжен**: стабильные `Timed Out` /
+  `item-not-found`, тогда как **группы** работают (у них фото из метаданных
+  группы). Если WhatsApp не кладёт `imgUrl` в синк — аватара 1:1 не будет.
+  Это ограничение WhatsApp/Baileys; 1:1-аватары — **best-effort**.
 
 Границы
 

@@ -61,6 +61,8 @@ interface StoredContact {
   name?: string;
   notify?: string;
   verifiedName?: string;
+  /** Profile-picture URL delivered with the contact sync, if any. */
+  imgUrl?: string;
 }
 
 /** Max messages persisted to disk per chat (bounds the store file). In memory a
@@ -82,6 +84,10 @@ const HISTORY_FETCH = 50;
 
 /** How long to wait for an on-demand history sync to land before giving up. */
 const HISTORY_SYNC_TIMEOUT_MS = 8000;
+
+/** Cap on fetching a chat avatar. It's off the critical path (streamed into the
+ *  header after load), so this is generous — 1:1 picture queries can be slow. */
+const AVATAR_TIMEOUT_MS = 15_000;
 
 /**
  * WhatsApp backend on Baileys (WebSocket, no browser). Data is event-driven:
@@ -435,9 +441,12 @@ export class WhatsAppProvider implements Messenger {
     if (!this.sock) {
       return undefined;
     }
+    const sock = this.sock;
     try {
       return await downloadMediaMessage(raw, "buffer", {}, {
-        reuploadRequest: this.sock.updateMediaMessage,
+        // Bound wrapper: passing the bare method loses `this`, so re-uploading an
+        // expired-URL media (common after a re-login / history sync) would throw.
+        reuploadRequest: (msg) => sock.updateMediaMessage(msg),
         logger: silentLogger as never,
       });
     } catch (err) {
@@ -446,30 +455,67 @@ export class WhatsAppProvider implements Messenger {
     }
   }
 
-  /** The chat's profile picture as a data URL (for the conversation header),
-   *  or undefined if it has none. Fetched via WhatsApp's picture URL and cached
-   *  (misses included) for the session. */
+  /** The chat's profile picture as a data URL (for the conversation header), or
+   *  undefined if it has none. Prefers the picture URL delivered with the contact
+   *  sync (reliable); otherwise queries profilePictureUrl, which is flaky for 1:1
+   *  chats (frequent timeouts / item-not-found). The result — including a miss —
+   *  is cached so a flaky photo isn't re-queried on every open; a fresh contact
+   *  imgUrl clears the cache (see storeContact) so it re-resolves. */
   async getAvatar(chatId: string): Promise<string | undefined> {
     const jid = this.canonical(chatId);
     if (this.avatars.has(jid)) {
       return this.avatars.get(jid);
     }
+    let url = this.contacts.get(jid)?.imgUrl;
+    if (!url) {
+      // Not connected yet (opened during startup/reconnect): retry later,
+      // without caching a miss that would blank the avatar for the session.
+      if (!this.sock || !this.open) {
+        return undefined;
+      }
+      try {
+        url =
+          (await this.sock.profilePictureUrl(jid, "preview", AVATAR_TIMEOUT_MS)) ??
+          undefined;
+      } catch {
+        this.avatars.set(jid, undefined); // timeout / not found — no picture
+        return undefined;
+      }
+    }
     let dataUrl: string | undefined;
-    try {
-      const url = await this.sock?.profilePictureUrl(jid, "preview");
-      if (url) {
-        const res = await fetch(url);
+    if (url) {
+      try {
+        const res = await fetch(url, {
+          signal: AbortSignal.timeout(AVATAR_TIMEOUT_MS),
+        });
         if (res.ok) {
           const buf = Buffer.from(await res.arrayBuffer());
           const mime = res.headers.get("content-type") || "image/jpeg";
           dataUrl = `data:${mime};base64,` + buf.toString("base64");
         }
+      } catch {
+        // fetch failed/timed out — cache the miss below.
       }
-    } catch {
-      // No picture (403/404), not connected, or fetch failed — cache the miss.
     }
     this.avatars.set(jid, dataUrl);
     return dataUrl;
+  }
+
+  /** Resolve a clicked @mention (a phone number in WhatsApp) to its 1:1 chat,
+   *  so the UI can open it. Returns the stored chat if we have one, else a
+   *  minimal chat for the number's jid. */
+  async resolveChat(query: string): Promise<Chat | undefined> {
+    const digits = query.replace(/\D/g, "");
+    if (!digits) {
+      return undefined;
+    }
+    const jid = this.canonical(`${digits}@s.whatsapp.net`);
+    const stored = this.chats.get(jid);
+    return {
+      id: jid,
+      title: chatTitle(jid, stored?.name, this.contacts.get(jid)),
+      canSend: true,
+    };
   }
 
   /** One-line chat-list preview: text, else a localized media/file label. */
@@ -872,11 +918,20 @@ export class WhatsAppProvider implements Messenger {
       this.learnMapping(ct.id, ct.phoneNumber);
     }
     const id = this.canonical(ct.id);
+    const prev = this.contacts.get(id);
+    // imgUrl: a real URL is the picture; "changed"/null/absent means unknown, so
+    // keep whatever we had. A fresh URL invalidates the cached avatar.
+    const imgUrl =
+      ct.imgUrl && ct.imgUrl !== "changed" ? ct.imgUrl : prev?.imgUrl;
+    if (imgUrl && imgUrl !== prev?.imgUrl) {
+      this.avatars.delete(id);
+    }
     this.contacts.set(id, {
       id,
       name: ct.name ?? undefined,
       notify: ct.notify ?? undefined,
       verifiedName: ct.verifiedName ?? undefined,
+      imgUrl,
     });
   }
 

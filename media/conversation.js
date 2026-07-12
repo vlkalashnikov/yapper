@@ -198,7 +198,14 @@
       if (m[1]) {
         frag.append(makeLink(m[1], m[1])); // URL
       } else if (m[2]) {
-        frag.append(makeLink("https://t.me/" + m[2], m[0])); // @mention
+        // @mention → clickable; the host resolves it to a chat via the active
+        // provider (Telegram: @username, WhatsApp: phone number) and opens it.
+        const a = document.createElement("a");
+        a.className = "link mention";
+        a.href = "#";
+        a.dataset.mention = m[2];
+        a.textContent = m[0];
+        frag.append(a);
       } else if (m[3]) {
         frag.append(makeFileLink(m[3])); // file:line reference
       } else {
@@ -1426,6 +1433,12 @@
       });
       return;
     }
+    const mention = e.target.closest?.("a.mention");
+    if (mention) {
+      e.preventDefault();
+      vscode.postMessage({ type: "openMention", query: mention.dataset.mention });
+      return;
+    }
     const link = e.target.closest?.("a.link");
     if (link) {
       e.preventDefault();
@@ -1491,6 +1504,13 @@
           msg.canSend,
           msg.canProfile
         );
+        break;
+      case "headerAvatar":
+        // The chat avatar arrives after the messages — swap it into the header.
+        if (msg.chatId === currentChatId && msg.avatar) {
+          chatAvatar = msg.avatar;
+          headerAvatarEl.replaceChildren(makeAvatar(titleEl.textContent, chatAvatar));
+        }
         break;
       case "prepend":
         if (msg.chatId === currentChatId) {

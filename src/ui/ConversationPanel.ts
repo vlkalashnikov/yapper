@@ -54,20 +54,32 @@ export class ConversationPanel {
 
     const token = ++this.loadSeq;
     try {
-      const [messages, avatar] = await Promise.all([
-        this.provider.getMessages(chat.id, chat.topicId),
-        this.provider.getAvatar?.(chat.id) ?? Promise.resolve(undefined),
-      ]);
+      const messages = await this.provider.getMessages(chat.id, chat.topicId);
       if (token === this.loadSeq) {
         void panel.webview.postMessage({
           type: "load",
           chat,
           messages,
-          avatar,
           unreadCount: chat.unreadCount ?? 0,
           canSend: chat.canSend !== false,
           canProfile: !!this.provider.getProfile,
         });
+        // Fetch the avatar off the critical path: it streams into the header
+        // when ready, so a slow/stalled picture request never blocks the load.
+        const avatarP = this.provider.getAvatar?.(chat.id);
+        if (avatarP) {
+          void avatarP
+            .then((avatar) => {
+              if (avatar && token === this.loadSeq) {
+                void panel.webview.postMessage({
+                  type: "headerAvatar",
+                  chatId: chat.id,
+                  avatar,
+                });
+              }
+            })
+            .catch(() => undefined);
+        }
         // Opening the chat marks it read (like Telegram), clearing the dot.
         if ((chat.unreadCount ?? 0) > 0) {
           void this.provider
@@ -256,6 +268,8 @@ export class ConversationPanel {
         );
       } else if (msg.type === "openLink" && msg.url) {
         await this.handleLink(msg.url);
+      } else if (msg.type === "openMention" && msg.query) {
+        await this.openMention(msg.query);
       } else if (msg.type === "openFile" && msg.file) {
         await this.openWorkspaceFile(msg.file, msg.line, msg.column);
       } else if (msg.type === "openMedia") {
@@ -331,6 +345,15 @@ export class ConversationPanel {
       }
     }
     void vscode.env.openExternal(vscode.Uri.parse(url));
+  }
+
+  /** Open the chat for a clicked @mention, resolved via the active provider
+   *  (Telegram: @username, WhatsApp: phone number). No-op if it can't resolve. */
+  private async openMention(query: string): Promise<void> {
+    const chat = await this.provider.resolveChat?.(query);
+    if (chat) {
+      await this.showChat(chat);
+    }
   }
 
   /** Load a profile (the open chat by default, or a specific chat/sender id) and

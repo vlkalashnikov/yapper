@@ -1,13 +1,8 @@
 import * as vscode from "vscode";
 import { TelegramCredentials } from "./storage";
+import { AuthCancelled } from "../../util/AuthCancelled";
 
-/** Raised when the user dismisses an auth input box. */
-export class AuthCancelled extends Error {
-  constructor() {
-    super(vscode.l10n.t("Authorization cancelled"));
-    this.name = "AuthCancelled";
-  }
-}
+export { AuthCancelled };
 
 /**
  * Ask for the api_id / api_hash pair (from my.telegram.org).

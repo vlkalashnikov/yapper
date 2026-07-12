@@ -1,11 +1,25 @@
 import * as vscode from "vscode";
 import * as QRCode from "qrcode";
-import { AuthCancelled } from "./auth";
+import { AuthCancelled } from "../util/AuthCancelled";
+
+/** Provider-supplied copy for the QR sign-in panel. `steps` may contain simple
+ *  inline HTML (e.g. <b>…</b>); it is our own localized text, not user input. */
+export interface QrLoginText {
+  /** Panel/tab title. */
+  title: string;
+  /** Heading shown above the QR. */
+  heading: string;
+  /** Ordered instruction steps. */
+  steps: string[];
+  /** Footer hint. */
+  hint: string;
+}
 
 /**
- * A webview panel that displays the Telegram QR login code. GramJS refreshes
- * the token periodically, so render() is called multiple times; the panel is
- * reused and only its QR image is swapped. Closing the panel cancels login.
+ * A provider-neutral webview panel that displays a QR login code. The provider
+ * refreshes the token periodically, so render() is called multiple times; the
+ * panel is reused and only its QR image is swapped. Closing the panel cancels
+ * login (the onCancel promise rejects with AuthCancelled).
  */
 export class QrLoginPanel {
   private panel?: vscode.WebviewPanel;
@@ -14,15 +28,15 @@ export class QrLoginPanel {
   /** Rejects with AuthCancelled if the user closes the panel before login finishes. */
   readonly onCancel: Promise<never>;
 
-  constructor() {
+  constructor(private readonly text: QrLoginText) {
     this.onCancel = new Promise<never>((_, reject) => {
       this.rejectCancel = reject;
     });
   }
 
-  /** Render (or re-render) the QR for the given tg://login URL. */
-  async render(loginUrl: string): Promise<void> {
-    const svg = await QRCode.toString(loginUrl, {
+  /** Render (or re-render) a QR encoding the given string (login URL / token). */
+  async render(data: string): Promise<void> {
+    const svg = await QRCode.toString(data, {
       type: "svg",
       margin: 1,
       color: { dark: "#000000", light: "#ffffff" },
@@ -31,7 +45,7 @@ export class QrLoginPanel {
     if (!this.panel) {
       this.panel = vscode.window.createWebviewPanel(
         "yapper.qrLogin",
-        vscode.l10n.t("Sign in to Telegram"),
+        this.text.title,
         vscode.ViewColumn.Active,
         { enableScripts: false, retainContextWhenHidden: true }
       );
@@ -53,8 +67,9 @@ export class QrLoginPanel {
   }
 
   private html(svg: string): string {
+    const steps = this.text.steps.map((s) => `<li>${s}</li>`).join("");
     return /* html */ `<!DOCTYPE html>
-<html lang="ru">
+<html lang="${vscode.env.language}">
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';" />
@@ -87,14 +102,10 @@ export class QrLoginPanel {
   </style>
 </head>
 <body>
-  <h2>${vscode.l10n.t("Sign in to Telegram with a QR code")}</h2>
+  <h2>${this.text.heading}</h2>
   <div class="qr">${svg}</div>
-  <ol>
-    <li>${vscode.l10n.t("Open Telegram on your phone")}</li>
-    <li>${vscode.l10n.t("Settings → Devices → {0}", "<b>" + vscode.l10n.t("Link Desktop Device") + "</b>")}</li>
-    <li>${vscode.l10n.t("Point the camera at this QR code")}</li>
-  </ol>
-  <div class="hint">${vscode.l10n.t("The code refreshes automatically. Keep this window open until you sign in.")}</div>
+  <ol>${steps}</ol>
+  <div class="hint">${this.text.hint}</div>
 </body>
 </html>`;
   }

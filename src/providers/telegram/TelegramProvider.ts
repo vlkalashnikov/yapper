@@ -20,7 +20,7 @@ import {
 } from "../types";
 import { TelegramStorage } from "./storage";
 import { promptCredentials, promptPassword } from "./auth";
-import { QrLoginPanel } from "./qrLogin";
+import { QrLoginPanel, QrLoginText } from "../../ui/QrLoginPanel";
 import {
   canSendTo,
   extFromMime,
@@ -133,7 +133,7 @@ export class TelegramProvider implements Messenger {
     }
 
     const client = this.createClient("", creds.apiId, creds.apiHash);
-    const qr = new QrLoginPanel();
+    const qr = new QrLoginPanel(telegramQrText());
 
     try {
       await client.connect();
@@ -1076,6 +1076,25 @@ export class TelegramProvider implements Messenger {
 /** Build the tg://login URL Telegram encodes into the QR code. */
 function loginUrl(token: Buffer): string {
   return `tg://login?token=${token.toString("base64url")}`;
+}
+
+/** Localized copy for the Telegram QR sign-in panel. */
+function telegramQrText(): QrLoginText {
+  return {
+    title: vscode.l10n.t("Sign in to Telegram"),
+    heading: vscode.l10n.t("Sign in to Telegram with a QR code"),
+    steps: [
+      vscode.l10n.t("Open Telegram on your phone"),
+      vscode.l10n.t(
+        "Settings → Devices → {0}",
+        "<b>" + vscode.l10n.t("Link Desktop Device") + "</b>"
+      ),
+      vscode.l10n.t("Point the camera at this QR code"),
+    ],
+    hint: vscode.l10n.t(
+      "The code refreshes automatically. Keep this window open until you sign in."
+    ),
+  };
 }
 
 /** True when a message carries a downloadable image thumbnail. */

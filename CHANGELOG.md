@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Provider-neutral `QrLoginPanel` and `AuthCancelled`, reused by Telegram and
   WhatsApp.
+- Minimum VS Code bumped to `^1.91.0` (Node.js 20), required by Baileys.
 
 ## [1.0.0] - 2026-07-12
 

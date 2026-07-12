@@ -57,7 +57,7 @@ Everywhere:
 
 ## Requirements
 
-- VS Code `^1.85.0`.
+- VS Code `^1.91.0` (ships Node.js 20, required by the WhatsApp/Baileys provider).
 - For the Telegram provider: a Telegram account and an **api_id** / **api_hash**,
   obtained once from [my.telegram.org](https://my.telegram.org) → *API
   development tools*. These identify the client application to Telegram (they

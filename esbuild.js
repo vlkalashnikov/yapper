@@ -9,7 +9,7 @@ const options = {
   bundle: true,
   format: "cjs",
   platform: "node",
-  target: "node18",
+  target: "node20",
   outfile: "dist/extension.js",
   // vscode is provided by the runtime, never bundle it. The rest are Baileys'
   // optional media/thumbnail peers — unused in the text-only WhatsApp provider,

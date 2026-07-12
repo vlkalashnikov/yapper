@@ -8,8 +8,8 @@ Claude-Code-style conversation tab that any messaging backend can plug into.
 It's built so the UI never depends on a specific messenger — each provider maps
 its own data into a shared model, and the interface renders it uniformly.
 
-**Telegram is fully supported today.** WhatsApp, Slack, Discord and Microsoft
-Teams are on the roadmap. The point isn't to reimplement each official client —
+**Telegram is fully supported today, WhatsApp is text-only.** Slack, Discord and
+Microsoft Teams are on the roadmap. The point isn't to reimplement each client —
 it's to give developers the things a normal messenger can't do from an editor:
 send a selection, a file, a `path:line` link, a `git diff` or the last commit
 straight into a chat.
@@ -19,10 +19,14 @@ straight into a chat.
 | Messenger | Status |
 | --- | --- |
 | **Telegram** | ✅ Available |
-| WhatsApp | 🧭 Planned |
+| **WhatsApp** | ✅ Available (text-only) |
 | Slack | 🧭 Planned |
 | Discord | 🧭 Planned |
 | Microsoft Teams | 🧭 Planned |
+
+Switch the active messenger with **Yapper: Switch Messenger**. WhatsApp support
+is text-only for now (chats, history, send, realtime); media, search and
+profiles are Telegram-only.
 
 ## Features
 
@@ -69,6 +73,10 @@ Everywhere:
 5. Enter your 2FA password if your account has one.
 
 Your chats appear in the sidebar. Click one to open the conversation tab.
+
+For **WhatsApp**, run **Yapper: Switch Messenger → WhatsApp**, click **Sign in**,
+and scan the QR from **WhatsApp → Settings → Linked Devices → Link a Device**.
+No api_id/api_hash needed.
 
 ## Commands
 

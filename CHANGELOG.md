@@ -3,6 +3,21 @@
 All notable changes to the Yapper extension are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+
+- **WhatsApp** provider (text-only) via Baileys: QR sign-in, chat list,
+  history, send, and realtime incoming messages.
+- Multiple messenger backends in one extension — switch the active one with
+  **Yapper: Switch Messenger**. Introduces a `Messenger` interface and a
+  provider registry, groundwork toward the unified messenger-agnostic vision.
+
+### Changed
+
+- Provider-neutral `QrLoginPanel` and `AuthCancelled`, reused by Telegram and
+  WhatsApp.
+
 ## [1.0.0] - 2026-07-12
 
 First public release — a unified developer messenger for VS Code, with full

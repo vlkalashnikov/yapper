@@ -16,6 +16,16 @@
   "Point the camera at this QR code": "Наведите камеру на этот QR-код",
   "The code refreshes automatically. Keep this window open until you sign in.": "Код обновляется автоматически. Не закрывайте окно до входа.",
 
+  "Sign in to WhatsApp": "Вход в WhatsApp",
+  "Sign in to WhatsApp with a QR code": "Вход в WhatsApp по QR-коду",
+  "Open WhatsApp on your phone": "Откройте WhatsApp на телефоне",
+  "Settings → Linked Devices → {0}": "Настройки → Связанные устройства → {0}",
+  "Link a Device": "Привязка устройства",
+  "Not connected to WhatsApp": "Нет подключения к WhatsApp",
+  "Failed to send": "Не удалось отправить",
+  "Signed out of WhatsApp": "Выход из WhatsApp выполнен",
+  "WhatsApp connection failed": "Не удалось подключиться к WhatsApp",
+
   "{0}: new message": "{0}: новое сообщение",
   "Open": "Открыть",
   "Unread: {0}": "Непрочитанных: {0}",

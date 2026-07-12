@@ -274,6 +274,7 @@
     "vitest": "^1.2.0"
   },
   "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
     "qrcode": "^1.5.4",
     "telegram": "^2.26.22"
   }

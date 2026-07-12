@@ -11,8 +11,17 @@ const options = {
   platform: "node",
   target: "node18",
   outfile: "dist/extension.js",
-  // vscode is provided by the runtime, never bundle it
-  external: ["vscode"],
+  // vscode is provided by the runtime, never bundle it. The rest are Baileys'
+  // optional media/thumbnail peers — unused in the text-only WhatsApp provider,
+  // so they are left external (never required at runtime) to keep the bundle lean.
+  external: [
+    "vscode",
+    "sharp",
+    "jimp",
+    "link-preview-js",
+    "qrcode-terminal",
+    "audio-decode",
+  ],
   sourcemap: !production,
   minify: production,
   logLevel: "info",

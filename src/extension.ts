@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { TelegramProvider } from "./providers/telegram/TelegramProvider";
 import { TelegramStorage } from "./providers/telegram/storage";
+import { WhatsAppProvider } from "./providers/whatsapp/WhatsAppProvider";
 import { ChatTreeProvider } from "./ui/ChatTreeProvider";
 import { ConversationPanel } from "./ui/ConversationPanel";
 import { Chat, GlobalHit, Message, Messenger } from "./providers/types";
@@ -12,8 +13,11 @@ const ACTIVE_PROVIDER_KEY = "yapper.activeProvider";
 export function activate(context: vscode.ExtensionContext): void {
   const storage = new TelegramStorage(context.secrets);
   const telegram = new TelegramProvider(storage);
-  // The registry of available messengers. WhatsApp is added below.
-  const providers: Messenger[] = [telegram];
+  const whatsapp = new WhatsAppProvider(
+    vscode.Uri.joinPath(context.globalStorageUri, "whatsapp-auth").fsPath
+  );
+  // The registry of available messengers.
+  const providers: Messenger[] = [telegram, whatsapp];
 
   // Restore the last active provider (default: the first available).
   const savedId = context.globalState.get<string>(ACTIVE_PROVIDER_KEY);

@@ -9,6 +9,7 @@ import makeWASocket, {
 import type {
   Contact,
   WAMessage,
+  WAMessageKey,
   WASocket,
 } from "@whiskeysockets/baileys";
 import { Chat, Message, Messenger } from "../types";
@@ -16,8 +17,10 @@ import { QrLoginPanel, QrLoginText } from "../../ui/QrLoginPanel";
 import { AuthCancelled } from "../../util/AuthCancelled";
 import {
   chatTitle,
+  isGroupJid,
   isRenderable,
   isSupportedJid,
+  mapStatus,
   toMessage,
   toNum,
 } from "./helpers";
@@ -51,8 +54,21 @@ interface StoredContact {
   verifiedName?: string;
 }
 
-/** Max messages kept (and persisted) per chat. */
+/** Max messages persisted to disk per chat (bounds the store file). In memory a
+ *  chat may hold more during a session as older history is paged in. */
 const MESSAGE_CAP = 60;
+
+/** Messages returned per pagination step (also the UI's history page size — a
+ *  shorter page signals the end of history). */
+const HISTORY_PAGE = 25;
+
+/** Messages requested from the server per on-demand history sync. Larger than
+ *  HISTORY_PAGE so the surplus is served locally on the next step and the
+ *  end-of-history heuristic only trips when the server really has no more. */
+const HISTORY_FETCH = 50;
+
+/** How long to wait for an on-demand history sync to land before giving up. */
+const HISTORY_SYNC_TIMEOUT_MS = 8000;
 
 /**
  * WhatsApp backend on Baileys (WebSocket, no browser). Data is event-driven:
@@ -65,6 +81,7 @@ export class WhatsAppProvider implements Messenger {
   readonly id = "whatsapp";
   readonly name = "WhatsApp";
   readonly beta = true; // text-only MVP — tagged BETA in the UI
+  readonly historyPageSize = HISTORY_PAGE;
 
   private sock?: WASocket;
   private open = false;
@@ -77,12 +94,20 @@ export class WhatsAppProvider implements Messenger {
   private readonly lidToPn = new Map<string, string>();
   /** Ids we sent ourselves, to skip the realtime echo. */
   private readonly sentIds = new Set<string>();
+  /** Pending on-demand history fetches: chatId -> resolver, released when the
+   *  requested older messages arrive (or the request times out). */
+  private readonly historyWaiters = new Map<
+    string,
+    { resolve: () => void; timer: NodeJS.Timeout }
+  >();
   private readonly storeFile: string;
   private refreshTimer?: NodeJS.Timeout;
   private persistTimer?: NodeJS.Timeout;
 
   private readonly _onMessage = new vscode.EventEmitter<Message>();
   readonly onMessage = this._onMessage.event;
+  private readonly _onMessageEdited = new vscode.EventEmitter<Message>();
+  readonly onMessageEdited = this._onMessageEdited.event;
   private readonly _onConnectionChange = new vscode.EventEmitter<boolean>();
   readonly onConnectionChange = this._onConnectionChange.event;
 
@@ -157,7 +182,46 @@ export class WhatsAppProvider implements Messenger {
   }
 
   async getMessages(chatId: string): Promise<Message[]> {
-    return [...(this.messages.get(chatId) ?? [])];
+    return this.withReceiptDefaults(chatId, [
+      ...(this.messages.get(chatId) ?? []),
+    ]);
+  }
+
+  /** Historical outgoing messages (persisted before receipts, or without a
+   *  synced status) have no tick. In a 1:1 chat such a message was delivered,
+   *  so default it to ✓✓ for display — the store is left untouched, and a live
+   *  status update still takes precedence when one arrives. */
+  private withReceiptDefaults(chatId: string, msgs: Message[]): Message[] {
+    if (isGroupJid(chatId)) {
+      return msgs;
+    }
+    return msgs.map((m) =>
+      m.outgoing && !m.status ? { ...m, status: "read" } : m
+    );
+  }
+
+  /** A page of messages older than `beforeMessageId`. Serves from the local
+   *  store when it holds older messages; otherwise pulls a chunk of history
+   *  from the server on demand and returns whatever lands. An empty result
+   *  tells the UI we've reached the start of history. */
+  async getMessagesBefore(
+    chatId: string,
+    beforeMessageId: string
+  ): Promise<Message[]> {
+    const arr = this.messages.get(chatId) ?? [];
+    const idx = arr.findIndex((m) => m.id === beforeMessageId);
+    if (idx > 0) {
+      // Older messages are already cached (e.g. surplus from a prior fetch).
+      return this.withReceiptDefaults(
+        chatId,
+        arr.slice(Math.max(0, idx - HISTORY_PAGE), idx)
+      );
+    }
+    if (idx !== 0) {
+      // Anchor isn't our oldest cached message — nothing reliable to page.
+      return [];
+    }
+    return this.withReceiptDefaults(chatId, await this.fetchOlder(chatId, arr[0]));
   }
 
   async sendMessage(chatId: string, text: string): Promise<Message> {
@@ -172,6 +236,11 @@ export class WhatsAppProvider implements Messenger {
       this.sentIds.add(sent.key.id);
     }
     const msg = this.storeMessage(sent);
+    // Reaching the server is at least "sent" — show the ✓ immediately (1:1 only)
+    // rather than waiting for the first delivery event.
+    if (msg && !isGroupJid(chatId) && !msg.status) {
+      msg.status = "sent";
+    }
     this.schedulePersist();
     return msg ?? toMessage(chatId, sent, this.mediaLabel());
   }
@@ -187,9 +256,13 @@ export class WhatsAppProvider implements Messenger {
     if (this.persistTimer) {
       clearTimeout(this.persistTimer);
     }
+    for (const jid of [...this.historyWaiters.keys()]) {
+      this.resolveHistory(jid);
+    }
     this.persistNow();
     this.sock?.end(undefined);
     this._onMessage.dispose();
+    this._onMessageEdited.dispose();
     this._onConnectionChange.dispose();
   }
 
@@ -298,11 +371,20 @@ export class WhatsAppProvider implements Messenger {
       for (const ct of contacts) {
         this.storeContact(ct);
       }
+      // Track which chats gained messages so pending on-demand fetches (which
+      // request older history via `messaging-history.set`) can be released.
+      const touched = new Set<string>();
       for (const m of messages) {
-        this.storeMessage(m);
+        const stored = this.storeMessage(m);
+        if (stored) {
+          touched.add(stored.chatId);
+        }
       }
       this.schedulePersist();
       this.scheduleRefresh();
+      for (const jid of touched) {
+        this.resolveHistory(jid);
+      }
     });
 
     sock.ev.on("chats.upsert", (chats) => {
@@ -350,6 +432,7 @@ export class WhatsAppProvider implements Messenger {
         return;
       }
       let changed = false;
+      const touched = new Set<string>();
       for (const m of messages) {
         const jid = m.key.remoteJid;
         if (!jid || !isSupportedJid(jid)) {
@@ -360,6 +443,7 @@ export class WhatsAppProvider implements Messenger {
           continue;
         }
         changed = true;
+        touched.add(msg.chatId);
         // Fire only for realtime ("notify") messages, and skip our own echoes.
         if (type === "notify" && !(m.key.id && this.sentIds.has(m.key.id))) {
           this._onMessage.fire(msg);
@@ -368,7 +452,76 @@ export class WhatsAppProvider implements Messenger {
       if (changed) {
         this.schedulePersist();
       }
+      // On-demand history may arrive here (non-realtime) rather than via
+      // `messaging-history.set` — release any pending page fetch for those chats.
+      if (type !== "notify") {
+        for (const jid of touched) {
+          this.resolveHistory(jid);
+        }
+      }
     });
+
+    // Read receipts arrive two ways: an aggregate delivery status on
+    // `messages.update` (SERVER_ACK/DELIVERY_ACK/READ), and per-peer receipts on
+    // `message-receipt.update` (read/played timestamps) — which is how 1:1 reads
+    // usually come. Both advance the tick ✓ → ✓✓ via applyStatus.
+    sock.ev.on("messages.update", (updates) => {
+      if (stale()) {
+        return;
+      }
+      let changed = false;
+      for (const { key, update } of updates) {
+        const next = mapStatus(update.status);
+        if (next && this.applyStatus(key, next)) {
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.schedulePersist();
+      }
+    });
+
+    sock.ev.on("message-receipt.update", (updates) => {
+      if (stale()) {
+        return;
+      }
+      // Any per-peer receipt (delivered or read) means the message reached the
+      // recipient → ✓✓, matching the delivery-based tick used above.
+      let changed = false;
+      for (const { key, receipt } of updates) {
+        const reached =
+          toNum(receipt.readTimestamp) > 0 ||
+          toNum(receipt.playedTimestamp) > 0 ||
+          toNum(receipt.receiptTimestamp) > 0 ||
+          (receipt.deliveredDeviceJid?.length ?? 0) > 0;
+        if (reached && this.applyStatus(key, "read")) {
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.schedulePersist();
+      }
+    });
+  }
+
+  /** Advance a stored outgoing message's read-receipt state and re-emit it so
+   *  the UI updates the tick. 1:1 only (mirrors Telegram); forward-only
+   *  (undefined → sent → read, never downgraded). Returns true if it changed.
+   *  Keys off the stored message being outgoing rather than `key.fromMe`, which
+   *  isn't reliably set on `message-receipt.update` keys. */
+  private applyStatus(key: WAMessageKey, next: "sent" | "read"): boolean {
+    const jid = key.remoteJid;
+    if (!jid || !isSupportedJid(jid) || isGroupJid(jid)) {
+      return false;
+    }
+    const arr = this.messages.get(this.canonical(jid));
+    const msg = key.id ? arr?.find((x) => x.id === key.id) : undefined;
+    if (!msg || !msg.outgoing || next === msg.status || msg.status === "read") {
+      return false;
+    }
+    msg.status = next;
+    this._onMessageEdited.fire({ ...msg });
+    return true;
   }
 
   // --- LID ↔ phone-number canonicalization (dedupes chats) ---
@@ -420,9 +573,6 @@ export class WhatsAppProvider implements Messenger {
         }
       }
       out.sort((a, b) => a.timestamp - b.timestamp);
-      if (out.length > MESSAGE_CAP) {
-        out.splice(0, out.length - MESSAGE_CAP);
-      }
       this.messages.set(pn, out);
       this.messages.delete(lid);
     }
@@ -489,11 +639,68 @@ export class WhatsAppProvider implements Messenger {
     }
     arr.push(msg);
     arr.sort((a, b) => a.timestamp - b.timestamp);
-    if (arr.length > MESSAGE_CAP) {
-      arr.splice(0, arr.length - MESSAGE_CAP);
-    }
+    // No in-memory cap: paged-in history must survive here (the cap is applied
+    // only when persisting to disk).
     this.messages.set(canon, arr);
     return msg;
+  }
+
+  // --- on-demand history (pagination) ---
+
+  /** Request a chunk of history older than `oldest` from the server and return
+   *  the messages that land (older than the anchor, newest-first-capped to a
+   *  page). Returns [] if disconnected, on error, or if nothing arrives. */
+  private async fetchOlder(chatId: string, oldest: Message): Promise<Message[]> {
+    if (!this.sock || !this.open) {
+      return [];
+    }
+    const key: WAMessageKey = {
+      remoteJid: chatId,
+      id: oldest.id,
+      fromMe: oldest.outgoing,
+      participant: oldest.senderId,
+    };
+    const landed = this.waitForHistory(chatId);
+    try {
+      // Baileys timestamps are in seconds; our Message.timestamp is ms.
+      await this.sock.fetchMessageHistory(
+        HISTORY_FETCH,
+        key,
+        Math.floor(oldest.timestamp / 1000)
+      );
+    } catch (err) {
+      console.error("[Yapper] WhatsApp fetchMessageHistory failed:", err);
+      this.resolveHistory(chatId);
+      return [];
+    }
+    await landed;
+    // Return the messages now older than the anchor (a page's worth).
+    const arr = this.messages.get(chatId) ?? [];
+    const idx = arr.findIndex((m) => m.id === oldest.id);
+    return idx > 0 ? arr.slice(Math.max(0, idx - HISTORY_PAGE), idx) : [];
+  }
+
+  /** A promise that resolves when an on-demand history chunk for `chatId` is
+   *  stored, or after a timeout. Supersedes any pending waiter for the chat. */
+  private waitForHistory(chatId: string): Promise<void> {
+    this.resolveHistory(chatId);
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        this.historyWaiters.delete(chatId);
+        resolve();
+      }, HISTORY_SYNC_TIMEOUT_MS);
+      this.historyWaiters.set(chatId, { resolve, timer });
+    });
+  }
+
+  /** Release a pending history waiter for `chatId`, if any. */
+  private resolveHistory(chatId: string): void {
+    const w = this.historyWaiters.get(chatId);
+    if (w) {
+      clearTimeout(w.timer);
+      this.historyWaiters.delete(chatId);
+      w.resolve();
+    }
   }
 
   /** Nudge the UI to re-read the chat list (debounced). The tree refreshes on
@@ -528,10 +735,15 @@ export class WhatsAppProvider implements Messenger {
   private persistNow(): void {
     try {
       fs.mkdirSync(this.authDir, { recursive: true });
+      // Persist only the newest MESSAGE_CAP messages per chat to bound the file;
+      // older history paged in during the session is re-fetched on demand.
+      const messages = Object.fromEntries(
+        [...this.messages].map(([jid, msgs]) => [jid, msgs.slice(-MESSAGE_CAP)])
+      );
       const data = {
         chats: [...this.chats.values()],
         contacts: [...this.contacts.values()],
-        messages: Object.fromEntries(this.messages),
+        messages,
         lidToPn: [...this.lidToPn.entries()],
       };
       fs.writeFileSync(this.storeFile, JSON.stringify(data));
@@ -561,6 +773,9 @@ export class WhatsAppProvider implements Messenger {
   }
 
   private clearStore(): void {
+    for (const jid of [...this.historyWaiters.keys()]) {
+      this.resolveHistory(jid);
+    }
     this.chats.clear();
     this.contacts.clear();
     this.messages.clear();

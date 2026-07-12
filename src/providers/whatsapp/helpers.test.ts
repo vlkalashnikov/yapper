@@ -6,6 +6,7 @@ import {
   isRenderable,
   isSupportedJid,
   jidUser,
+  mapStatus,
   messageText,
   toMessage,
   toNum,
@@ -78,6 +79,19 @@ describe("chatTitle", () => {
   });
 });
 
+describe("mapStatus", () => {
+  it("maps WhatsApp delivery status to read-receipt state", () => {
+    expect(mapStatus(0)).toBeUndefined(); // ERROR
+    expect(mapStatus(1)).toBeUndefined(); // PENDING
+    expect(mapStatus(2)).toBe("sent"); // SERVER_ACK → ✓
+    expect(mapStatus(3)).toBe("read"); // DELIVERY_ACK → ✓✓ (delivered)
+    expect(mapStatus(4)).toBe("read"); // READ
+    expect(mapStatus(5)).toBe("read"); // PLAYED
+    expect(mapStatus(null)).toBeUndefined();
+    expect(mapStatus(undefined)).toBeUndefined();
+  });
+});
+
 describe("toMessage", () => {
   const base = {
     key: { id: "M1", remoteJid: "1@s.whatsapp.net" },
@@ -112,6 +126,40 @@ describe("toMessage", () => {
     );
     expect(msg.outgoing).toBe(true);
     expect(msg.author).toBe("");
+  });
+
+  it("sets read-receipt status for outgoing 1:1 messages", () => {
+    const msg = toMessage(
+      "1@s.whatsapp.net",
+      wa({
+        key: { id: "M2", fromMe: true, remoteJid: "1@s.whatsapp.net" },
+        message: { conversation: "yo" },
+        messageTimestamp: 5,
+        status: 4,
+      }),
+      "[media]"
+    );
+    expect(msg.status).toBe("read");
+  });
+
+  it("omits status for incoming and for group messages", () => {
+    const incoming = toMessage(
+      "1@s.whatsapp.net",
+      wa({ ...base, message: { conversation: "hi" }, status: 4 }),
+      "[media]"
+    );
+    expect(incoming.status).toBeUndefined();
+    const group = toMessage(
+      "g@g.us",
+      wa({
+        key: { id: "G1", fromMe: true, remoteJid: "g@g.us" },
+        message: { conversation: "hey" },
+        messageTimestamp: 1,
+        status: 4,
+      }),
+      "[media]"
+    );
+    expect(group.status).toBeUndefined();
   });
 
   it("uses the media placeholder when there is no text", () => {

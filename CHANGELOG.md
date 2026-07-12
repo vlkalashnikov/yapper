@@ -3,20 +3,21 @@
 All notable changes to the Yapper extension are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.1.0] - 2026-07-12
 
 ### Added
 
-- **WhatsApp** provider (text-only) via Baileys: QR sign-in, chat list,
-  history, send, and realtime incoming messages.
+- **WhatsApp** provider (text-only, **BETA**) via Baileys: QR sign-in, chat
+  list, history, send, and realtime incoming messages. Chats and messages
+  persist across restarts; LID/phone-number addressing is deduplicated.
 - Multiple messenger backends in one extension — switch the active one with
   **Yapper: Switch Messenger**. Introduces a `Messenger` interface and a
   provider registry, groundwork toward the unified messenger-agnostic vision.
+  Not-yet-complete providers are tagged **BETA** in the UI.
 
 ### Changed
 
-- Provider-neutral `QrLoginPanel` and `AuthCancelled`, reused by Telegram and
-  WhatsApp.
+- Provider-neutral `QrLoginPanel` and `AuthCancelled`, reused across providers.
 - Minimum VS Code bumped to `^1.91.0` (Node.js 20), required by Baileys.
 
 ## [1.0.0] - 2026-07-12

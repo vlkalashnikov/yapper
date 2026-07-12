@@ -68,3 +68,28 @@ mute из Telegram нигде не читается.
 
 **Статус:** исправлен.
 
+
+---
+
+## Ревью v1.1.1 — на потом (мелочи, не блокеры)
+
+Из code-review диапазона `9f0d36d..HEAD`. Падений/потери данных нет; правки
+отложены.
+
+- [ ] **`monospaceBlock`: код-блок с внутренними ` ``` `.** Гард
+      `!full[1].includes("```")` уводит целиком-обёрнутое сообщение с внутренним
+      ` ``` ` в инлайн-ветку; при нечётном числе фенсов остаётся литеральный
+      ` ``` ` в конце. Всплывёт при Share Code кода, содержащего ` ``` `.
+      ([helpers.ts](../src/providers/whatsapp/helpers.ts))
+- [ ] **Тост «Copied» при пустой записи.** Кнопка код-блока всегда зовёт
+      `showCopied()`, а хост пишет в буфер только при `msg.text`; для пустого
+      блока «Copied» мигает без записи. ([conversation.js](../media/conversation.js))
+- [ ] **`escapeMd` не экранирует `~`.** GFM-strikethrough в tooltip: `~~x~~` в
+      имени/превью рендерится зачёркнутым. Косметика (не инъекция).
+      ([ChatTreeProvider.ts](../src/ui/ChatTreeProvider.ts))
+- [ ] **Tooltip строится жадно** для всех строк списка — лучше лениво через
+      `resolveTreeItem`. ([ChatTreeProvider.ts](../src/ui/ChatTreeProvider.ts))
+- [ ] **`monospaceBlock` без fast-path** — на каждое не-медиа сообщение гоняется
+      regex; `if (text.indexOf("```") === -1) return { text };` в начале.
+- [ ] **Комментарий про `verified`** («badge in the list») не соответствует —
+      бейдж только в tooltip, не в строке. ([types.ts](../src/providers/types.ts))

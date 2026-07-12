@@ -23,6 +23,7 @@ import {
   isGroupJid,
   isRenderable,
   isSupportedJid,
+  jidUser,
   mapStatus,
   mimeOf,
   muteActive,
@@ -216,14 +217,18 @@ export class WhatsAppProvider implements Messenger {
       const msgs = this.messages.get(jid);
       const last = msgs && msgs.length ? msgs[msgs.length - 1] : undefined;
       const ts = Math.max(c.ts, last?.timestamp ?? 0);
+      const contact = this.contacts.get(jid);
       rows.push({
         chat: {
           id: jid,
-          title: chatTitle(jid, c.name, this.contacts.get(jid)),
+          title: chatTitle(jid, c.name, contact),
           lastMessage: last ? this.previewOf(last) || undefined : undefined,
+          lastMessageTime: ts || undefined,
           unreadCount: c.unreadCount,
           canSend: true,
           muted: muteActive(c.mutedUntil ?? 0, Date.now()),
+          phone: jid.endsWith("@s.whatsapp.net") ? `+${jidUser(jid)}` : undefined,
+          verified: !!contact?.verifiedName,
         },
         ts,
       });

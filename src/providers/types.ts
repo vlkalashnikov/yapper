@@ -22,6 +22,12 @@ export interface Chat {
   muted?: boolean;
   /** True when the chat is in Telegram's Archive (folder id 1). */
   archived?: boolean;
+  /** Time of the last message (Unix epoch ms), for the list's timestamp. */
+  lastMessageTime?: number;
+  /** Phone number (1:1 chats), for the list tooltip. */
+  phone?: string;
+  /** True for a verified business/official account (a badge in the list). */
+  verified?: boolean;
 }
 
 /** A forum topic (sub-thread) inside a forum group. */

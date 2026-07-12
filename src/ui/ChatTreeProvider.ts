@@ -18,11 +18,11 @@ export class ChatTreeItem extends vscode.TreeItem {
         : vscode.TreeItemCollapsibleState.None
     );
 
-    this.description = chat.lastMessage;
-    this.tooltip = chat.lastMessage;
-    this.iconPath = new vscode.ThemeIcon(
-      chat.isForum ? "comment-discussion" : "comment-discussion"
-    );
+    this.description = describeChat(chat);
+    this.tooltip = chatTooltip(chat);
+    // The native tree can't reliably render a raster avatar as the item icon
+    // (empty slot), so we stay on a themed icon; the avatar lives in the header.
+    this.iconPath = new vscode.ThemeIcon("comment-discussion");
     this.contextValue = chat.isForum ? "yapper.forum" : "yapper.chat";
 
     // Forum chats expand into topics; only leaf chats open directly.
@@ -34,6 +34,60 @@ export class ChatTreeItem extends vscode.TreeItem {
       };
     }
   }
+}
+
+/** The dimmed line after the title: [🔇] [time] preview. */
+function describeChat(chat: Chat): string {
+  const bits: string[] = [];
+  if (chat.muted) {
+    bits.push("🔇");
+  }
+  if (chat.lastMessageTime) {
+    bits.push(formatTime(chat.lastMessageTime));
+  }
+  if (chat.lastMessage) {
+    bits.push(chat.lastMessage);
+  }
+  return bits.join("  ");
+}
+
+/** A hover card: title (+ badge), phone, last message, mute state. */
+function chatTooltip(chat: Chat): vscode.MarkdownString {
+  const md = new vscode.MarkdownString();
+  md.appendMarkdown(`**${escapeMd(chat.title)}**${chat.verified ? " ✅" : ""}\n\n`);
+  if (chat.phone) {
+    md.appendMarkdown(`${escapeMd(chat.phone)}\n\n`);
+  }
+  if (chat.lastMessage) {
+    md.appendMarkdown(`${escapeMd(chat.lastMessage)}\n\n`);
+  }
+  if (chat.muted) {
+    md.appendMarkdown(vscode.l10n.t("🔇 Muted"));
+  }
+  return md;
+}
+
+/** Time as HH:MM for today, otherwise a short date. */
+function formatTime(ms: number): string {
+  const d = new Date(ms);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  return sameDay
+    ? d.toLocaleTimeString(vscode.env.language, {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : d.toLocaleDateString(vscode.env.language, {
+        day: "2-digit",
+        month: "2-digit",
+      });
+}
+
+function escapeMd(s: string): string {
+  return s.replace(/[\\`*_{}[\]()#+\-.!|>]/g, "\\$&");
 }
 
 /** Tree item for a forum topic. Opens the chat filtered to that topic. */

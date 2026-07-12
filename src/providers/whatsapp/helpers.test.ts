@@ -8,6 +8,7 @@ import {
   jidUser,
   mapStatus,
   messageText,
+  mimeOf,
   muteActive,
   toMessage,
   toNum,
@@ -67,6 +68,39 @@ describe("isRenderable", () => {
   });
 });
 
+describe("wrapped (container) messages", () => {
+  it("unwraps disappearing (ephemeral) text", () => {
+    const m = wa({
+      message: { ephemeralMessage: { message: { conversation: "poof" } } },
+    });
+    expect(messageText(m)).toBe("poof");
+    expect(isRenderable(m)).toBe(true);
+  });
+  it("unwraps view-once media (renderable, no text)", () => {
+    const m = wa({
+      message: { viewOnceMessageV2: { message: { imageMessage: {} } } },
+    });
+    expect(isRenderable(m)).toBe(true);
+    expect(messageText(m)).toBe("");
+  });
+  it("unwraps a message sent from another device", () => {
+    const m = wa({
+      message: { deviceSentMessage: { message: { conversation: "hey" } } },
+    });
+    expect(messageText(m)).toBe("hey");
+  });
+  it("unwraps nested containers (ephemeral → view-once)", () => {
+    const m = wa({
+      message: {
+        ephemeralMessage: {
+          message: { viewOnceMessageV2: { message: { conversation: "deep" } } },
+        },
+      },
+    });
+    expect(messageText(m)).toBe("deep");
+  });
+});
+
 describe("chatTitle", () => {
   it("prefers WA name, then contact fields, then the jid user", () => {
     expect(chatTitle("1@s.whatsapp.net", "Group", undefined)).toBe("Group");
@@ -90,6 +124,22 @@ describe("mapStatus", () => {
     expect(mapStatus(5)).toBe("read"); // PLAYED
     expect(mapStatus(null)).toBeUndefined();
     expect(mapStatus(undefined)).toBeUndefined();
+  });
+});
+
+describe("mimeOf", () => {
+  it("maps source/text files to text/plain (open inline)", () => {
+    expect(mimeOf("main.ts")).toBe("text/plain");
+    expect(mimeOf("a.diff")).toBe("text/plain");
+    expect(mimeOf("notes.md")).toBe("text/markdown");
+  });
+  it("maps common binary types", () => {
+    expect(mimeOf("doc.pdf")).toBe("application/pdf");
+    expect(mimeOf("pic.PNG")).toBe("image/png");
+  });
+  it("falls back to octet-stream for unknown or extension-less names", () => {
+    expect(mimeOf("archive.xyz")).toBe("application/octet-stream");
+    expect(mimeOf("Makefile")).toBe("application/octet-stream");
   });
 });
 

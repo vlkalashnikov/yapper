@@ -21,6 +21,7 @@ import {
   isRenderable,
   isSupportedJid,
   mapStatus,
+  mimeOf,
   muteActive,
   toMessage,
   toNum,
@@ -61,6 +62,10 @@ interface StoredContact {
 /** Max messages persisted to disk per chat (bounds the store file). In memory a
  *  chat may hold more during a session as older history is paged in. */
 const MESSAGE_CAP = 60;
+
+/** Minimum gap between manual re-syncs (Refresh button), so rapid clicks don't
+ *  hammer the connection — reconnecting too often risks WhatsApp throttling. */
+const RESYNC_COOLDOWN_MS = 15_000;
 
 /** Messages returned per pagination step (also the UI's history page size — a
  *  shorter page signals the end of history). */
@@ -107,6 +112,9 @@ export class WhatsAppProvider implements Messenger {
   private readonly storeFile: string;
   private refreshTimer?: NodeJS.Timeout;
   private persistTimer?: NodeJS.Timeout;
+  /** Debounce state for resync(): a reconnect in flight, and the last start. */
+  private resyncing = false;
+  private lastResyncAt = 0;
 
   private readonly _onMessage = new vscode.EventEmitter<Message>();
   readonly onMessage = this._onMessage.event;
@@ -132,6 +140,28 @@ export class WhatsAppProvider implements Messenger {
     await this.openSocket(undefined).catch((err) => {
       console.error("[Yapper] WhatsApp init failed:", err);
     });
+  }
+
+  /** Force a re-sync by reconnecting the socket, which makes WhatsApp re-deliver
+   *  messages that arrived while offline. Guarded against rapid Refresh clicks:
+   *  skipped if signed out, already reconnecting, or within the cooldown. */
+  async resync(): Promise<void> {
+    if (!this.hasSession() || this.resyncing) {
+      return;
+    }
+    const now = Date.now();
+    if (now - this.lastResyncAt < RESYNC_COOLDOWN_MS) {
+      return;
+    }
+    this.lastResyncAt = now;
+    this.resyncing = true;
+    try {
+      await this.openSocket(undefined);
+    } catch (err) {
+      console.error("[Yapper] WhatsApp resync failed:", err);
+    } finally {
+      this.resyncing = false;
+    }
   }
 
   /** Interactive QR sign-in: show the code, resolve once connected. */
@@ -248,6 +278,72 @@ export class WhatsAppProvider implements Messenger {
     }
     this.schedulePersist();
     return msg ?? toMessage(chatId, sent, this.mediaLabel());
+  }
+
+  /** Send a code block. WhatsApp monospace is triple-backtick, so we send that
+   *  for the recipient, but store the raw code with a `pre` entity so our own
+   *  webview renders a code block rather than literal backticks. */
+  async sendCode(chatId: string, text: string, language?: string): Promise<Message> {
+    if (!this.sock) {
+      throw new Error(vscode.l10n.t("Not connected to WhatsApp"));
+    }
+    const sent = await this.sock.sendMessage(chatId, { text: "```" + text + "```" });
+    if (!sent) {
+      throw new Error(vscode.l10n.t("Failed to send"));
+    }
+    return this.recordOutgoing(chatId, sent, {
+      text,
+      entities: [{ type: "pre", offset: 0, length: text.length, language }],
+    });
+  }
+
+  /** Send a local file as a document (upload from disk). */
+  async sendFile(
+    chatId: string,
+    filePath: string,
+    filename?: string
+  ): Promise<Message> {
+    if (!this.sock) {
+      throw new Error(vscode.l10n.t("Not connected to WhatsApp"));
+    }
+    const data = fs.readFileSync(filePath);
+    const name = filename ?? path.basename(filePath);
+    const sent = await this.sock.sendMessage(chatId, {
+      document: data,
+      fileName: name,
+      mimetype: mimeOf(name),
+    });
+    if (!sent) {
+      throw new Error(vscode.l10n.t("Failed to send"));
+    }
+    return this.recordOutgoing(chatId, sent, {
+      file: { name, size: data.length },
+    });
+  }
+
+  /** Record a message we built ourselves (code block / document) into the store,
+   *  suppress its realtime echo, and return it for the UI to append. */
+  private recordOutgoing(
+    chatId: string,
+    sent: WAMessage,
+    extra: Partial<Message>
+  ): Message {
+    if (sent.key.id) {
+      this.sentIds.add(sent.key.id);
+    }
+    const canon = this.canonical(chatId);
+    const msg = this.insertMessage({
+      id: sent.key.id ?? "",
+      chatId: canon,
+      author: "",
+      text: "",
+      timestamp: toNum(sent.messageTimestamp) * 1000,
+      outgoing: true,
+      status: isGroupJid(canon) ? undefined : "sent",
+      ...extra,
+    });
+    this.schedulePersist();
+    return msg;
   }
 
   isChatMuted(chatId: string): boolean {
@@ -637,24 +733,27 @@ export class WhatsAppProvider implements Messenger {
     });
   }
 
-  /** Map + insert a message (oldest-first, deduped, capped). Returns the mapped
+  /** Map + insert a message (oldest-first, deduped). Returns the mapped
    *  message, or null when it's not a supported/renderable chat message. */
   private storeMessage(m: WAMessage): Message | null {
     const jid = m.key.remoteJid;
     if (!jid || !isSupportedJid(jid) || !isRenderable(m)) {
       return null;
     }
-    const canon = this.canonical(jid);
-    const msg = toMessage(canon, m, this.mediaLabel());
-    const arr = this.messages.get(canon) ?? [];
+    return this.insertMessage(toMessage(this.canonical(jid), m, this.mediaLabel()));
+  }
+
+  /** Insert an already-mapped message into its chat (oldest-first, deduped by
+   *  id). No in-memory cap: paged-in history must survive here (the cap is
+   *  applied only when persisting to disk). */
+  private insertMessage(msg: Message): Message {
+    const arr = this.messages.get(msg.chatId) ?? [];
     if (arr.some((x) => x.id === msg.id)) {
       return msg;
     }
     arr.push(msg);
     arr.sort((a, b) => a.timestamp - b.timestamp);
-    // No in-memory cap: paged-in history must survive here (the cap is applied
-    // only when persisting to disk).
-    this.messages.set(canon, arr);
+    this.messages.set(msg.chatId, arr);
     return msg;
   }
 

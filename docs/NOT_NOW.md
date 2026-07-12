@@ -17,5 +17,5 @@
   (ADR-009).
 - WhatsApp: медиа, поиск, профили (ADR-010). Тумблер mute — с карточкой
   профиля (mute уже уважается read-only, ADR-013).
-  Пагинация истории (ADR-011), read-receipts (ADR-012) и read-only mute
-  (ADR-013) — сделаны в v1.1.
+  Сделаны в v1.1: пагинация истории (ADR-011), read-receipts (ADR-012),
+  read-only mute (ADR-013), editor-парити `sendCode`/`sendFile` (ADR-014).

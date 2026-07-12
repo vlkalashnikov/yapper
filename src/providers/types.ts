@@ -318,6 +318,12 @@ export interface Messenger extends MessengerProvider {
   /** Release resources (disconnect, dispose emitters). */
   dispose(): void;
 
+  /** Force a re-sync from the backend (e.g. reconnect to pull messages missed
+   *  while offline). Optional: providers whose `getChats` already hits the
+   *  network (Telegram) don't need it. Wired to the Refresh button, so
+   *  implementations must debounce against rapid re-triggers. */
+  resync?(): Promise<void>;
+
   /** Whether a chat is currently muted (drives notification suppression). */
   isChatMuted?(chatId: string): boolean;
 }

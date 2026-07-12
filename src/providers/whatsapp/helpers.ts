@@ -41,6 +41,41 @@ export function jidUser(jid: string): string {
   return jid.split("@")[0].split(":")[0];
 }
 
+/** Best-effort MIME type from a filename extension, for sending a document
+ *  (Baileys requires a mimetype). Unknown types fall back to a generic
+ *  downloadable file. Source/text files map to text/plain so they open inline. */
+export function mimeOf(filename: string): string {
+  const i = filename.lastIndexOf(".");
+  const ext = i > 0 ? filename.slice(i + 1).toLowerCase() : "";
+  const map: Record<string, string> = {
+    txt: "text/plain",
+    md: "text/markdown",
+    json: "application/json",
+    xml: "application/xml",
+    html: "text/html",
+    css: "text/css",
+    csv: "text/csv",
+    js: "text/plain",
+    ts: "text/plain",
+    tsx: "text/plain",
+    jsx: "text/plain",
+    py: "text/plain",
+    sh: "text/plain",
+    yml: "text/plain",
+    yaml: "text/plain",
+    diff: "text/plain",
+    patch: "text/plain",
+    log: "text/plain",
+    pdf: "application/pdf",
+    zip: "application/zip",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+  };
+  return map[ext] ?? "application/octet-stream";
+}
+
 /** Map WhatsApp's delivery status (WebMessageInfo.Status enum) to the model's
  *  two-state tick. WhatsApp shows ✓✓ already on delivery (and READ doesn't
  *  reliably reach a linked device), so: SERVER_ACK (2) → "sent" (✓);
@@ -77,9 +112,34 @@ export function muteActive(muteEndTime: number, nowMs: number): boolean {
   return endMs > nowMs;
 }
 
+/** Peel WhatsApp's container messages down to the inner content, whose real
+ *  payload is nested. Without this such messages look empty and get dropped —
+ *  e.g. the other side's messages in a disappearing-messages chat
+ *  (`ephemeralMessage`), view-once media, a document with caption, an edited
+ *  message, or a message you sent from another device (`deviceSentMessage`). */
+export function unwrapContent(
+  message: WAMessage["message"]
+): WAMessage["message"] {
+  let m = message;
+  for (let i = 0; i < 5 && m; i++) {
+    const inner =
+      m.ephemeralMessage?.message ??
+      m.viewOnceMessage?.message ??
+      m.viewOnceMessageV2?.message ??
+      m.documentWithCaptionMessage?.message ??
+      m.editedMessage?.message ??
+      m.deviceSentMessage?.message;
+    if (!inner) {
+      break;
+    }
+    m = inner;
+  }
+  return m;
+}
+
 /** Plain text of a WhatsApp message, or "" if it carries none (media/other). */
 export function messageText(m: WAMessage): string {
-  const msg = m.message;
+  const msg = unwrapContent(m.message);
   if (!msg) {
     return "";
   }
@@ -89,11 +149,11 @@ export function messageText(m: WAMessage): string {
 /** Whether a message has content worth rendering (text or a known media kind);
  *  filters out pure protocol messages (key exchanges, receipts, …). */
 export function isRenderable(m: WAMessage): boolean {
-  const msg = m.message;
+  const msg = unwrapContent(m.message);
   if (!msg) {
     return false;
   }
-  if (messageText(m)) {
+  if (msg.conversation || msg.extendedTextMessage?.text) {
     return true;
   }
   return !!(

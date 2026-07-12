@@ -149,6 +149,10 @@ export function activate(context: vscode.ExtensionContext): void {
     conversation.onDidRead(() => chatTree.refresh()),
 
     vscode.commands.registerCommand("yapper.refreshChats", () => {
+      // Re-read the local list, and (for providers that need it, e.g. WhatsApp)
+      // reconnect to pull any messages missed while offline. resync debounces
+      // itself against rapid clicks.
+      void active.resync?.();
       chatTree.refresh();
     }),
 

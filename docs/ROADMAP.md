@@ -109,6 +109,8 @@ Public Release
         `messages.update` (ADR-012);
   - [x] Mute — read-only: уважаем мьюты WhatsApp (тихие чаты не пикают
         тостами); тумблер — позже с карточкой профиля (ADR-013);
+  - [x] Editor-парити — `sendCode`/`sendFile`: Share Selection/Diff/File
+        работают на WhatsApp (код — triple-backtick, файл — документ) (ADR-014);
   - [ ] Медиа, поиск, профили (см. NOT_NOW / ADR-010) — **в работе**.
 
 ---

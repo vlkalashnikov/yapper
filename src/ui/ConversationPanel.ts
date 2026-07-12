@@ -64,6 +64,7 @@ export class ConversationPanel {
           avatar,
           unreadCount: chat.unreadCount ?? 0,
           canSend: chat.canSend !== false,
+          canProfile: !!this.provider.getProfile,
         });
         // Opening the chat marks it read (like Telegram), clearing the dot.
         if ((chat.unreadCount ?? 0) > 0) {
@@ -335,6 +336,9 @@ export class ConversationPanel {
   private async handleProfile(chatId?: string): Promise<void> {
     const targetId = chatId ?? this.currentChat?.id;
     if (!targetId || !this.provider.getProfile) {
+      // Provider has no profiles (e.g. WhatsApp MVP) — dismiss the overlay the
+      // webview opened optimistically instead of leaving its spinner hanging.
+      void this.panel?.webview.postMessage({ type: "profileError" });
       return;
     }
     const profile = await this.provider.getProfile(targetId);

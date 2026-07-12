@@ -34,6 +34,8 @@
 
   let currentChatId = null;
   let currentCanSend = true;
+  // Whether the active provider supports profile cards (Telegram: yes).
+  let currentCanProfile = true;
   let chatAvatar = null;
   let lastDay = null;
   // Full history currently held, oldest-first. Re-rendered on pagination.
@@ -844,8 +846,9 @@
     headerAvatarEl.replaceChildren(makeAvatar(chat.title, chatAvatar));
   }
 
-  function load(chat, messages, avatar, unread, canSend) {
+  function load(chat, messages, avatar, unread, canSend, canProfile) {
     currentChatId = chat.id;
+    currentCanProfile = canProfile !== false;
     chatAvatar = avatar || null;
     allMessages = messages || [];
     unreadCount = unread || 0;
@@ -981,7 +984,7 @@
     if (e.target.closest("#header-search")) {
       return;
     }
-    if (currentChatId) {
+    if (currentChatId && currentCanProfile) {
       showProfileLoading(); // show the overlay immediately while data loads
       vscode.postMessage({ type: "openProfile" });
     }
@@ -1398,7 +1401,7 @@
     }
     // Click a message author's name/avatar → open their profile.
     const user = e.target.closest?.(".clickable-user");
-    if (user && user.dataset.senderId) {
+    if (user && user.dataset.senderId && currentCanProfile) {
       showProfileLoading();
       vscode.postMessage({ type: "openProfile", chatId: user.dataset.senderId });
       return;
@@ -1471,7 +1474,14 @@
         showError(msg.chat, msg.message);
         break;
       case "load":
-        load(msg.chat, msg.messages, msg.avatar, msg.unreadCount, msg.canSend);
+        load(
+          msg.chat,
+          msg.messages,
+          msg.avatar,
+          msg.unreadCount,
+          msg.canSend,
+          msg.canProfile
+        );
         break;
       case "prepend":
         if (msg.chatId === currentChatId) {

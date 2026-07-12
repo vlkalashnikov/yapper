@@ -26,6 +26,7 @@ describe("toNum", () => {
 describe("jid helpers", () => {
   it("classifies supported jids (1:1 and groups only)", () => {
     expect(isSupportedJid("123@s.whatsapp.net")).toBe(true);
+    expect(isSupportedJid("123@lid")).toBe(true);
     expect(isSupportedJid("123-456@g.us")).toBe(true);
     expect(isSupportedJid("status@broadcast")).toBe(false);
     expect(isSupportedJid("123@newsletter")).toBe(false);

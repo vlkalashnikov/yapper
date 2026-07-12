@@ -21,10 +21,14 @@ interface Long {
   toNumber(): number;
 }
 
-/** Only 1:1 (@s.whatsapp.net) and group (@g.us) chats are shown; status
- *  broadcasts, newsletters and lid-only jids are skipped. */
+/** Only user chats are shown — 1:1 (@s.whatsapp.net or the newer @lid
+ *  addressing) and groups (@g.us); status broadcasts and newsletters skipped. */
 export function isSupportedJid(jid: string): boolean {
-  return jid.endsWith("@s.whatsapp.net") || jid.endsWith("@g.us");
+  return (
+    jid.endsWith("@s.whatsapp.net") ||
+    jid.endsWith("@lid") ||
+    jid.endsWith("@g.us")
+  );
 }
 
 /** True for a group jid (…@g.us). */

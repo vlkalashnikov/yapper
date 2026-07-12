@@ -3,6 +3,29 @@
 All notable changes to the Yapper extension are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.1.1] - 2026-07-13
+
+### Added
+
+- **WhatsApp**: history pagination (on-demand older-message fetch), read
+  receipts (✓/✓✓), read-only mute, editor sharing (**Send Code/File to Chat**),
+  incoming media (previews + downloads), and the chat avatar in the header.
+- **Refresh** now reconnects WhatsApp to pull messages missed while offline
+  (debounced).
+- **Chat list**: last-message time, a 🔇 mute marker, and a hover tooltip
+  (title, phone, preview, mute).
+- **Copy formatted text**: a Copy button on code blocks and click-to-copy on
+  inline code fragments, with a "Copied" toast.
+
+### Fixed
+
+- **WhatsApp**: no longer drops disappearing / view-once / device-sent messages
+  (container messages are unwrapped); code renders as a block instead of literal
+  triple-backticks; `@`-mentions open the chat via the active provider instead
+  of a Telegram link; media re-downloads after a re-login.
+- Loading a chat no longer blocks on the avatar (streamed into the header), and
+  a stale older-messages loader no longer lingers as a second spinner.
+
 ## [1.1.0] - 2026-07-12
 
 ### Added

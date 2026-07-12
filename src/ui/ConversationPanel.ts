@@ -665,7 +665,7 @@ export class ConversationPanel {
     <span id="header-avatar"></span><span id="title"></span>
     <button id="header-search" title="${vscode.l10n.t("Search in chat")}">🔍</button>
   </div>
-  <div id="messages"><div id="thread"></div></div>
+  <div id="messages"><div id="older-loader" class="hidden"><div class="spinner"></div></div><div id="thread"></div></div>
   <button id="scroll-down" class="hidden" title="${vscode.l10n.t("Scroll to bottom")}">↓</button>
   <div id="composer">
     <div id="mention-popup" class="hidden"></div>

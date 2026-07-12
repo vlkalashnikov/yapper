@@ -18,6 +18,7 @@
   const mentionPopup = document.getElementById("mention-popup");
   const replyBar = document.getElementById("reply-bar");
   const scrollDownBtn = document.getElementById("scroll-down");
+  const olderLoader = document.getElementById("older-loader");
   const composer = document.getElementById("composer");
   const readonlyBar = document.getElementById("readonly");
   const lightbox = document.getElementById("lightbox");
@@ -705,11 +706,19 @@
     }
   }
 
+  // Toggle the older-history fetch state and its top spinner together.
+  function setLoadingOlder(v) {
+    loadingOlder = v;
+    if (olderLoader) {
+      olderLoader.classList.toggle("hidden", !v);
+    }
+  }
+
   function requestOlder() {
     if (loadingOlder || !hasMoreOlder || !allMessages.length || !currentChatId) {
       return;
     }
-    loadingOlder = true;
+    setLoadingOlder(true);
     vscode.postMessage({
       type: "loadOlder",
       chatId: currentChatId,
@@ -852,7 +861,7 @@
     chatAvatar = avatar || null;
     allMessages = messages || [];
     unreadCount = unread || 0;
-    loadingOlder = false;
+    setLoadingOlder(false);
     hasMoreOlder = true;
     loadingNewer = false;
     hasMoreNewer = false; // a normal open shows the live tail
@@ -873,7 +882,7 @@
   }
 
   function prependOlder(messages) {
-    loadingOlder = false;
+    setLoadingOlder(false);
     if (!messages || !messages.length) {
       hasMoreOlder = false;
       continueJump();
@@ -893,7 +902,7 @@
     }
     allMessages = messages;
     unreadCount = 0;
-    loadingOlder = false;
+    setLoadingOlder(false);
     hasMoreOlder = true;
     loadingNewer = false;
     hasMoreNewer = true; // the live tail isn't loaded after a jump

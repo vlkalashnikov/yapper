@@ -110,6 +110,9 @@ export class WhatsAppProvider implements Messenger {
   /** Raw media messages, by message id, so media can be downloaded lazily.
    *  In-memory only (media keys aren't persisted) — like Telegram's cache. */
   private readonly rawMessages = new Map<string, WAMessage>();
+  /** Chat avatars as data URLs, by jid. Caches misses (undefined) too, so a
+   *  chat without a picture isn't re-fetched every open. */
+  private readonly avatars = new Map<string, string | undefined>();
   /** Pending on-demand history fetches: chatId -> resolver, released when the
    *  requested older messages arrive (or the request times out). */
   private readonly historyWaiters = new Map<
@@ -441,6 +444,32 @@ export class WhatsAppProvider implements Messenger {
       console.error("[Yapper] WhatsApp media download failed:", err);
       return undefined;
     }
+  }
+
+  /** The chat's profile picture as a data URL (for the conversation header),
+   *  or undefined if it has none. Fetched via WhatsApp's picture URL and cached
+   *  (misses included) for the session. */
+  async getAvatar(chatId: string): Promise<string | undefined> {
+    const jid = this.canonical(chatId);
+    if (this.avatars.has(jid)) {
+      return this.avatars.get(jid);
+    }
+    let dataUrl: string | undefined;
+    try {
+      const url = await this.sock?.profilePictureUrl(jid, "preview");
+      if (url) {
+        const res = await fetch(url);
+        if (res.ok) {
+          const buf = Buffer.from(await res.arrayBuffer());
+          const mime = res.headers.get("content-type") || "image/jpeg";
+          dataUrl = `data:${mime};base64,` + buf.toString("base64");
+        }
+      }
+    } catch {
+      // No picture (403/404), not connected, or fetch failed — cache the miss.
+    }
+    this.avatars.set(jid, dataUrl);
+    return dataUrl;
   }
 
   /** One-line chat-list preview: text, else a localized media/file label. */
@@ -1017,6 +1046,7 @@ export class WhatsAppProvider implements Messenger {
     this.lidToPn.clear();
     this.sentIds.clear();
     this.rawMessages.clear();
+    this.avatars.clear();
   }
 
   /** Whether a saved auth session exists on disk. */

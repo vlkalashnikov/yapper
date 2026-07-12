@@ -463,3 +463,25 @@ Selection/Diff/File бросали «not supported»).
   ходит в сеть; у WhatsApp `getMessages` читает локальный стор. Приемлемо для
   MVP; при необходимости — персист миниатюр/дескрипторов позже;
 - документы качаются без media-пиров (`sharp`/`jimp` externalized).
+
+---
+
+# ADR-017
+
+## WhatsApp: аватары чатов
+
+Фото чата в шапке диалога (`getAvatar`, как у Telegram; UI уже готов —
+`ConversationPanel` подставляет его в `load`).
+
+Решение
+
+- `sock.profilePictureUrl(jid, "preview")` → URL миниатюры → `fetch` (глобальный,
+  Node 20) → data URL;
+- кэш `avatars` по jid, **включая промахи** (undefined), чтобы чат без фото не
+  перезапрашивался каждое открытие; чистится в `clearStore`.
+
+Границы
+
+- только **аватар чата** (шапка). Дерево чатов — на `ThemeIcon` (как у
+  Telegram). Пер-сообщенческие аватары авторов в группах (`Message.avatar`) —
+  позже (нужен async-проход по отправителям при загрузке).

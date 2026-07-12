@@ -71,6 +71,9 @@ export class WhatsAppProvider implements Messenger {
   private readonly contacts = new Map<string, StoredContact>();
   /** jid -> normalized messages, oldest-first. */
   private readonly messages = new Map<string, Message[]>();
+  /** LID jid -> phone-number jid, so a contact addressed both ways (WhatsApp's
+   *  LID migration) collapses to one canonical chat instead of duplicating. */
+  private readonly lidToPn = new Map<string, string>();
   /** Ids we sent ourselves, to skip the realtime echo. */
   private readonly sentIds = new Set<string>();
   private readonly storeFile: string;
@@ -334,6 +337,13 @@ export class WhatsAppProvider implements Messenger {
       this.scheduleRefresh();
     });
 
+    sock.ev.on("lid-mapping.update", (m) => {
+      if (stale()) {
+        return;
+      }
+      this.learnMapping(m.lid, m.pn);
+    });
+
     sock.ev.on("messages.upsert", ({ messages, type }) => {
       if (stale()) {
         return;
@@ -360,6 +370,69 @@ export class WhatsAppProvider implements Messenger {
     });
   }
 
+  // --- LID ↔ phone-number canonicalization (dedupes chats) ---
+
+  /** The canonical key for a jid: a phone-number jid when we know the LID's
+   *  mapping, otherwise the jid unchanged. */
+  private canonical(jid: string): string {
+    return this.lidToPn.get(jid) ?? jid;
+  }
+
+  /** Record a LID→PN mapping and fold any already-split chat/messages together. */
+  private learnMapping(lidRaw: string, pnRaw: string): void {
+    const lid = lidRaw.includes("@") ? lidRaw : `${lidRaw}@lid`;
+    const pn = pnRaw.includes("@") ? pnRaw : `${pnRaw}@s.whatsapp.net`;
+    if (!lid.endsWith("@lid") || !pn.endsWith("@s.whatsapp.net")) {
+      return;
+    }
+    if (this.lidToPn.get(lid) === pn) {
+      return;
+    }
+    this.lidToPn.set(lid, pn);
+    this.mergeAlias(lid, pn);
+    this.schedulePersist();
+    this.scheduleRefresh();
+  }
+
+  /** Merge an aliased LID chat (and its messages/contact) into the PN chat. */
+  private mergeAlias(lid: string, pn: string): void {
+    const lidChat = this.chats.get(lid);
+    if (lidChat) {
+      const pnChat = this.chats.get(pn);
+      this.chats.set(pn, {
+        id: pn,
+        name: pnChat?.name ?? lidChat.name,
+        unreadCount: Math.max(pnChat?.unreadCount ?? 0, lidChat.unreadCount),
+        ts: Math.max(pnChat?.ts ?? 0, lidChat.ts),
+      });
+      this.chats.delete(lid);
+    }
+
+    const lidMsgs = this.messages.get(lid);
+    if (lidMsgs) {
+      const seen = new Set<string>();
+      const out: Message[] = [];
+      for (const m of [...(this.messages.get(pn) ?? []), ...lidMsgs]) {
+        if (!seen.has(m.id)) {
+          seen.add(m.id);
+          out.push({ ...m, chatId: pn });
+        }
+      }
+      out.sort((a, b) => a.timestamp - b.timestamp);
+      if (out.length > MESSAGE_CAP) {
+        out.splice(0, out.length - MESSAGE_CAP);
+      }
+      this.messages.set(pn, out);
+      this.messages.delete(lid);
+    }
+
+    const lidContact = this.contacts.get(lid);
+    if (lidContact && !this.contacts.has(pn)) {
+      this.contacts.set(pn, { ...lidContact, id: pn });
+    }
+    this.contacts.delete(lid);
+  }
+
   /** Upsert a chat into the store (merging partial updates from
    *  history.set / chats.upsert / chats.update). */
   private storeChat(c: {
@@ -371,9 +444,10 @@ export class WhatsAppProvider implements Messenger {
     if (!c.id) {
       return;
     }
-    const prev = this.chats.get(c.id);
-    this.chats.set(c.id, {
-      id: c.id,
+    const id = this.canonical(c.id);
+    const prev = this.chats.get(id);
+    this.chats.set(id, {
+      id,
       name: c.name ?? prev?.name,
       unreadCount: c.unreadCount ?? prev?.unreadCount ?? 0,
       ts:
@@ -384,8 +458,15 @@ export class WhatsAppProvider implements Messenger {
   }
 
   private storeContact(ct: Contact): void {
-    this.contacts.set(ct.id, {
-      id: ct.id,
+    if (ct.lid && ct.phoneNumber) {
+      this.learnMapping(ct.lid, ct.phoneNumber);
+    }
+    if (ct.id.endsWith("@lid") && ct.phoneNumber) {
+      this.learnMapping(ct.id, ct.phoneNumber);
+    }
+    const id = this.canonical(ct.id);
+    this.contacts.set(id, {
+      id,
       name: ct.name ?? undefined,
       notify: ct.notify ?? undefined,
       verifiedName: ct.verifiedName ?? undefined,
@@ -399,8 +480,9 @@ export class WhatsAppProvider implements Messenger {
     if (!jid || !isSupportedJid(jid) || !isRenderable(m)) {
       return null;
     }
-    const msg = toMessage(jid, m, this.mediaLabel());
-    const arr = this.messages.get(jid) ?? [];
+    const canon = this.canonical(jid);
+    const msg = toMessage(canon, m, this.mediaLabel());
+    const arr = this.messages.get(canon) ?? [];
     if (arr.some((x) => x.id === msg.id)) {
       return msg;
     }
@@ -409,7 +491,7 @@ export class WhatsAppProvider implements Messenger {
     if (arr.length > MESSAGE_CAP) {
       arr.splice(0, arr.length - MESSAGE_CAP);
     }
-    this.messages.set(jid, arr);
+    this.messages.set(canon, arr);
     return msg;
   }
 
@@ -449,6 +531,7 @@ export class WhatsAppProvider implements Messenger {
         chats: [...this.chats.values()],
         contacts: [...this.contacts.values()],
         messages: Object.fromEntries(this.messages),
+        lidToPn: [...this.lidToPn.entries()],
       };
       fs.writeFileSync(this.storeFile, JSON.stringify(data));
     } catch (err) {
@@ -459,6 +542,9 @@ export class WhatsAppProvider implements Messenger {
   private loadStore(): void {
     try {
       const data = JSON.parse(fs.readFileSync(this.storeFile, "utf8"));
+      for (const [lid, pn] of data.lidToPn ?? []) {
+        this.lidToPn.set(lid, pn);
+      }
       for (const c of data.chats ?? []) {
         this.chats.set(c.id, c);
       }
@@ -477,6 +563,7 @@ export class WhatsAppProvider implements Messenger {
     this.chats.clear();
     this.contacts.clear();
     this.messages.clear();
+    this.lidToPn.clear();
     this.sentIds.clear();
   }
 

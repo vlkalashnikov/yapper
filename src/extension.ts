@@ -4,31 +4,55 @@ import { TelegramProvider } from "./providers/telegram/TelegramProvider";
 import { TelegramStorage } from "./providers/telegram/storage";
 import { ChatTreeProvider } from "./ui/ChatTreeProvider";
 import { ConversationPanel } from "./ui/ConversationPanel";
-import { Chat, GlobalHit, Message } from "./providers/types";
+import { Chat, GlobalHit, Message, Messenger } from "./providers/types";
+
+// globalState key remembering which provider was active last session.
+const ACTIVE_PROVIDER_KEY = "yapper.activeProvider";
 
 export function activate(context: vscode.ExtensionContext): void {
   const storage = new TelegramStorage(context.secrets);
-  const provider = new TelegramProvider(storage);
-  const chatTree = new ChatTreeProvider(provider);
+  const telegram = new TelegramProvider(storage);
+  // The registry of available messengers. WhatsApp is added below.
+  const providers: Messenger[] = [telegram];
+
+  // Restore the last active provider (default: the first available).
+  const savedId = context.globalState.get<string>(ACTIVE_PROVIDER_KEY);
+  let active: Messenger =
+    providers.find((p) => p.id === savedId) ?? providers[0];
+
+  const chatTree = new ChatTreeProvider(active);
   const conversation = new ConversationPanel(
     context.extensionUri,
     context.globalStorageUri,
-    provider
+    active
   );
 
   const treeView = vscode.window.createTreeView("yapper.chats", {
     treeDataProvider: chatTree,
   });
 
-  const setConnected = (connected: boolean): void => {
+  // A single context key drives command/menu visibility for the active provider.
+  const setConnected = (): void => {
     void vscode.commands.executeCommand(
       "setContext",
-      "yapper.telegram.connected",
-      connected
+      "yapper.connected",
+      active.connected
     );
     chatTree.refresh();
   };
-  setConnected(false);
+  setConnected();
+
+  // Make `next` the active provider: re-point the UI and remember the choice.
+  const switchTo = (next: Messenger): void => {
+    if (next === active) {
+      return;
+    }
+    active = next;
+    void context.globalState.update(ACTIVE_PROVIDER_KEY, active.id);
+    chatTree.setProvider(active);
+    conversation.setProvider(active);
+    setConnected();
+  };
 
   // Show a toast for an incoming message unless the user is reading that chat.
   const maybeNotify = (message: Message): void => {
@@ -42,7 +66,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (conversation.isViewing(message.chatId, message.topicId)) {
       return;
     }
-    if (provider.isChatMuted(message.chatId)) {
+    if (active.isChatMuted?.(message.chatId)) {
       return;
     }
     const chat = chatTree.getChatById(message.chatId);
@@ -61,6 +85,53 @@ export function activate(context: vscode.ExtensionContext): void {
     });
   };
 
+  // Wire every provider's realtime events. Only the active provider drives the
+  // UI, so each handler ignores events coming from an inactive provider.
+  for (const p of providers) {
+    const subs: vscode.Disposable[] = [
+      p.onConnectionChange(() => {
+        if (p === active) {
+          setConnected();
+        }
+      }),
+      p.onMessage((message) => {
+        if (p !== active) {
+          return;
+        }
+        chatTree.refresh();
+        conversation.appendIfCurrent(message);
+        maybeNotify(message);
+      }),
+    ];
+    const edited = p.onMessageEdited?.((message) => {
+      if (p === active) {
+        chatTree.refresh();
+        conversation.updateIfCurrent(message);
+      }
+    });
+    if (edited) {
+      subs.push(edited);
+    }
+    const deleted = p.onMessagesDeleted?.(({ chatId, ids }) => {
+      if (p === active) {
+        chatTree.refresh();
+        conversation.deleteIfCurrent(chatId, ids);
+      }
+    });
+    if (deleted) {
+      subs.push(deleted);
+    }
+    const readOutbox = p.onReadOutbox?.(({ chatId, maxId }) => {
+      if (p === active) {
+        conversation.updateReadStatus(chatId, maxId);
+      }
+    });
+    if (readOutbox) {
+      subs.push(readOutbox);
+    }
+    context.subscriptions.push(...subs, { dispose: () => p.dispose() });
+  }
+
   context.subscriptions.push(
     treeView,
 
@@ -71,28 +142,6 @@ export function activate(context: vscode.ExtensionContext): void {
           : undefined;
     }),
 
-    provider.onConnectionChange(setConnected),
-
-    provider.onMessage((message) => {
-      chatTree.refresh();
-      conversation.appendIfCurrent(message);
-      maybeNotify(message);
-    }),
-
-    provider.onMessageEdited((message) => {
-      chatTree.refresh();
-      conversation.updateIfCurrent(message);
-    }),
-
-    provider.onMessagesDeleted(({ chatId, ids }) => {
-      chatTree.refresh();
-      conversation.deleteIfCurrent(chatId, ids);
-    }),
-
-    provider.onReadOutbox(({ chatId, maxId }) => {
-      conversation.updateReadStatus(chatId, maxId);
-    }),
-
     conversation.onDidRead(() => chatTree.refresh()),
 
     vscode.commands.registerCommand("yapper.refreshChats", () => {
@@ -100,9 +149,14 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand("yapper.searchGlobal", () => {
-      if (!provider.connected) {
+      const p = active;
+      if (!p.connected) {
+        vscode.window.showWarningMessage(vscode.l10n.t("Yapper: sign in first"));
+        return;
+      }
+      if (!p.searchGlobal) {
         vscode.window.showWarningMessage(
-          vscode.l10n.t("Yapper: sign in to Telegram first")
+          vscode.l10n.t("Yapper: not supported by {0}", p.name)
         );
         return;
       }
@@ -119,7 +173,7 @@ export function activate(context: vscode.ExtensionContext): void {
         }
         const token = ++seq;
         qp.busy = true;
-        const hits = (await provider.searchGlobal(q)) ?? [];
+        const hits = (await p.searchGlobal!(q)) ?? [];
         if (token !== seq) {
           return;
         }
@@ -136,7 +190,7 @@ export function activate(context: vscode.ExtensionContext): void {
         const sel = qp.selectedItems[0];
         qp.hide();
         if (sel) {
-          const chat = await provider.resolveChat(sel.hit.chatId);
+          const chat = await p.resolveChat?.(sel.hit.chatId);
           if (chat) {
             await conversation.openMessage(chat, sel.hit.messageId);
           }
@@ -147,13 +201,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand("yapper.searchChats", async () => {
-      if (!provider.connected) {
-        vscode.window.showWarningMessage(
-          vscode.l10n.t("Yapper: sign in to Telegram first")
-        );
+      const p = active;
+      if (!p.connected) {
+        vscode.window.showWarningMessage(vscode.l10n.t("Yapper: sign in first"));
         return;
       }
-      const chats = await provider.getChats();
+      const chats = await p.getChats();
       const items = chats.map((chat) => ({
         label: `${chat.unreadCount ? "$(circle-filled) " : ""}${chat.title}`,
         description: chat.lastMessage,
@@ -171,18 +224,35 @@ export function activate(context: vscode.ExtensionContext): void {
       void conversation.showChat(chat);
     }),
 
-    vscode.commands.registerCommand("yapper.telegram.login", async () => {
+    vscode.commands.registerCommand("yapper.login", async () => {
+      const p = active;
       try {
-        await provider.login();
-        if (provider.connected) {
+        await p.login();
+        if (p.connected) {
           vscode.window.showInformationMessage(
-            vscode.l10n.t("Yapper: signed in to Telegram")
+            vscode.l10n.t("Yapper: signed in to {0}", p.name)
           );
         }
       } catch (err) {
         vscode.window.showErrorMessage(
           vscode.l10n.t("Yapper: sign-in failed — {0}", (err as Error).message)
         );
+      }
+    }),
+
+    vscode.commands.registerCommand("yapper.switchMessenger", async () => {
+      const pick = await vscode.window.showQuickPick(
+        providers.map((p) => ({
+          label: `${p === active ? "$(check) " : ""}${p.name}`,
+          description: p.connected
+            ? vscode.l10n.t("connected")
+            : vscode.l10n.t("not signed in"),
+          provider: p,
+        })),
+        { placeHolder: vscode.l10n.t("Switch messenger") }
+      );
+      if (pick) {
+        switchTo(pick.provider);
       }
     }),
 
@@ -270,20 +340,22 @@ export function activate(context: vscode.ExtensionContext): void {
       await conversation.shareText(formatCommit(commit));
     }),
 
-    vscode.commands.registerCommand("yapper.telegram.logout", async () => {
-      await provider.logout();
+    vscode.commands.registerCommand("yapper.logout", async () => {
+      const p = active;
+      await p.logout();
       vscode.window.showInformationMessage(
-        vscode.l10n.t("Yapper: signed out of Telegram")
+        vscode.l10n.t("Yapper: signed out of {0}", p.name)
       );
-    }),
-
-    { dispose: () => provider.dispose() }
+    })
   );
 
-  // Reconnect a saved session in the background so chats appear on startup.
-  provider.init().catch((err) => {
-    console.error("[Yapper] Telegram init failed:", err);
-  });
+  // Reconnect each provider's saved session in the background so chats appear
+  // on startup (whichever is active drives the UI).
+  for (const p of providers) {
+    p.init().catch((err) => {
+      console.error(`[Yapper] ${p.name} init failed:`, err);
+    });
+  }
 
   console.log("Yapper activated");
 }

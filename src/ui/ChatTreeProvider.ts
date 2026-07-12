@@ -95,10 +95,17 @@ export class ChatTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   private chatById = new Map<string, Chat>();
 
-  constructor(private readonly provider: MessengerProvider) {}
+  constructor(private provider: MessengerProvider) {}
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
+  }
+
+  /** Point the tree at a different (newly active) provider and rebuild. */
+  setProvider(provider: MessengerProvider): void {
+    this.provider = provider;
+    this.chatById = new Map();
+    this.refresh();
   }
 
   /** The chat with the given id from the last-loaded list, if known. */

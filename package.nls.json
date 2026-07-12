@@ -5,8 +5,9 @@
   "cmd.searchChats": "Yapper: Search Chats",
   "cmd.searchGlobal": "Yapper: Search All Messages",
   "cmd.openChat": "Yapper: Open Chat",
-  "cmd.login": "Yapper: Sign in to Telegram",
-  "cmd.logout": "Yapper: Sign out of Telegram",
+  "cmd.login": "Yapper: Sign in",
+  "cmd.logout": "Yapper: Sign out",
+  "cmd.switchMessenger": "Yapper: Switch Messenger",
   "cmd.shareSelection": "Yapper: Send Code to Chat",
   "cmd.shareLocation": "Yapper: Send Line Link to Chat",
   "cmd.shareFile": "Yapper: Send File to Chat",
@@ -15,5 +16,5 @@
   "config.title": "Yapper",
   "config.notifications.enabled": "Show a notification for new incoming messages",
   "config.notifications.showPreview": "Show message text in the notification (otherwise only the sender)",
-  "welcome.content": "Sign in to Telegram to see your chats.\n[Sign in to Telegram](command:yapper.telegram.login)"
+  "welcome.content": "Sign in to see your chats.\n[Sign in](command:yapper.login)\n[Switch messenger](command:yapper.switchMessenger)"
 }

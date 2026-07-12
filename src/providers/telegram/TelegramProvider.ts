@@ -14,7 +14,7 @@ import {
   MediaFile,
   Member,
   Message,
-  MessengerProvider,
+  Messenger,
   Profile,
   Topic,
 } from "../types";
@@ -40,7 +40,7 @@ const HISTORY_LIMIT = 50;
  * session persistence, reading dialogs and history, sending, and realtime
  * incoming messages.
  */
-export class TelegramProvider implements MessengerProvider {
+export class TelegramProvider implements Messenger {
   readonly id = "telegram";
   readonly name = "Telegram";
   readonly historyPageSize = HISTORY_LIMIT;

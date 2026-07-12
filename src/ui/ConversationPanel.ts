@@ -26,8 +26,17 @@ export class ConversationPanel {
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly storageUri: vscode.Uri,
-    private readonly provider: MessengerProvider
+    private provider: MessengerProvider
   ) {}
+
+  /** Switch to a different (newly active) provider. The open conversation
+   *  belongs to the previous provider, so close it and drop its caches. */
+  setProvider(provider: MessengerProvider): void {
+    this.provider = provider;
+    this.currentChat = undefined;
+    this.fileCache.clear();
+    this.panel?.dispose();
+  }
 
   /** Open (or reuse) the conversation tab for a chat. */
   async showChat(chat: Chat): Promise<void> {

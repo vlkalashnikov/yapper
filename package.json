@@ -75,13 +75,18 @@
         "title": "%cmd.openChat%"
       },
       {
-        "command": "yapper.telegram.login",
+        "command": "yapper.login",
         "title": "%cmd.login%"
       },
       {
-        "command": "yapper.telegram.logout",
+        "command": "yapper.logout",
         "title": "%cmd.logout%",
         "icon": "$(sign-out)"
+      },
+      {
+        "command": "yapper.switchMessenger",
+        "title": "%cmd.switchMessenger%",
+        "icon": "$(arrow-swap)"
       },
       {
         "command": "yapper.shareSelection",
@@ -110,84 +115,100 @@
       "view/title": [
         {
           "command": "yapper.searchChats",
-          "when": "view == yapper.chats && yapper.telegram.connected",
+          "when": "view == yapper.chats && yapper.connected",
           "group": "navigation@0"
         },
         {
           "command": "yapper.refreshChats",
-          "when": "view == yapper.chats && yapper.telegram.connected",
+          "when": "view == yapper.chats && yapper.connected",
           "group": "navigation@1"
         },
         {
-          "command": "yapper.telegram.logout",
-          "when": "view == yapper.chats && yapper.telegram.connected",
+          "command": "yapper.logout",
+          "when": "view == yapper.chats && yapper.connected",
           "group": "navigation@2"
+        },
+        {
+          "command": "yapper.switchMessenger",
+          "when": "view == yapper.chats",
+          "group": "navigation@3"
         }
       ],
       "editor/context": [
         {
           "command": "yapper.shareSelection",
-          "when": "editorTextFocus && yapper.telegram.connected",
+          "when": "editorTextFocus && yapper.connected",
           "group": "9_cutcopypaste@10"
         },
         {
           "command": "yapper.shareLocation",
-          "when": "editorTextFocus && yapper.telegram.connected",
+          "when": "editorTextFocus && yapper.connected",
           "group": "9_cutcopypaste@11"
         },
         {
           "command": "yapper.shareFile",
-          "when": "editorTextFocus && yapper.telegram.connected",
+          "when": "editorTextFocus && yapper.connected",
           "group": "9_cutcopypaste@12"
         }
       ],
       "explorer/context": [
         {
           "command": "yapper.shareFile",
-          "when": "yapper.telegram.connected && !explorerResourceIsFolder",
+          "when": "yapper.connected && !explorerResourceIsFolder",
           "group": "7_modification"
         }
       ],
       "scm/title": [
         {
           "command": "yapper.shareDiff",
-          "when": "yapper.telegram.connected",
+          "when": "yapper.connected",
           "group": "inline"
         },
         {
           "command": "yapper.shareCommit",
-          "when": "yapper.telegram.connected",
+          "when": "yapper.connected",
           "group": "inline"
         }
       ],
       "commandPalette": [
         {
           "command": "yapper.searchChats",
-          "when": "yapper.telegram.connected"
+          "when": "yapper.connected"
         },
         {
           "command": "yapper.searchGlobal",
-          "when": "yapper.telegram.connected"
+          "when": "yapper.connected"
         },
         {
           "command": "yapper.shareSelection",
-          "when": "yapper.telegram.connected"
+          "when": "yapper.connected"
         },
         {
           "command": "yapper.shareLocation",
-          "when": "yapper.telegram.connected"
+          "when": "yapper.connected"
         },
         {
           "command": "yapper.shareDiff",
-          "when": "yapper.telegram.connected"
+          "when": "yapper.connected"
         },
         {
           "command": "yapper.shareCommit",
-          "when": "yapper.telegram.connected"
+          "when": "yapper.connected"
         },
         {
           "command": "yapper.shareFile",
-          "when": "yapper.telegram.connected"
+          "when": "yapper.connected"
+        },
+        {
+          "command": "yapper.switchMessenger"
+        },
+        {
+          "command": "yapper.login",
+          "when": "!yapper.connected"
+        },
+        {
+          "command": "yapper.logout",
+          "when": "yapper.connected"
         },
         {
           "command": "yapper.openChat",
@@ -199,7 +220,7 @@
       {
         "view": "yapper.chats",
         "contents": "%welcome.content%",
-        "when": "!yapper.telegram.connected"
+        "when": "!yapper.connected"
       }
     ],
     "configuration": {
@@ -222,13 +243,13 @@
         "command": "yapper.searchChats",
         "key": "ctrl+alt+c",
         "mac": "cmd+alt+c",
-        "when": "yapper.telegram.connected"
+        "when": "yapper.connected"
       },
       {
         "command": "yapper.searchGlobal",
         "key": "ctrl+alt+g",
         "mac": "cmd+alt+g",
-        "when": "yapper.telegram.connected"
+        "when": "yapper.connected"
       }
     ]
   },

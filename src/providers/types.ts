@@ -2,6 +2,7 @@
  * Provider abstraction. Every messenger (Telegram, WhatsApp, Slack, ...)
  * implements this interface so the UI stays messenger-agnostic.
  */
+import type * as vscode from "vscode";
 
 export interface Chat {
   id: string;
@@ -281,4 +282,39 @@ export interface MessengerProvider {
    * "no folders" → the UI shows a flat list.
    */
   getFolders?(chats: Chat[]): Promise<Folder[]>;
+}
+
+/**
+ * A live messenger backend: the realtime + lifecycle surface on top of the data
+ * interface. `extension.ts` drives the app through this (connect, sign-in,
+ * realtime events); the UI (tree/panel) only needs `MessengerProvider`.
+ * Telegram and WhatsApp implement this; the mock provider only needs the data
+ * interface, so it stays free of `vscode`.
+ */
+export interface Messenger extends MessengerProvider {
+  /** True once connected/authorized. */
+  readonly connected: boolean;
+
+  /** Fires when a new message arrives in any chat. */
+  readonly onMessage: vscode.Event<Message>;
+  /** Fires true after login/reconnect, false after logout/disconnect. */
+  readonly onConnectionChange: vscode.Event<boolean>;
+  /** Fires when a message is edited (optional per provider). */
+  readonly onMessageEdited?: vscode.Event<Message>;
+  /** Fires when messages are deleted (chatId may be unknown). */
+  readonly onMessagesDeleted?: vscode.Event<{ chatId?: string; ids: string[] }>;
+  /** Fires when the peer reads our messages up to maxId (read receipts). */
+  readonly onReadOutbox?: vscode.Event<{ chatId: string; maxId: number }>;
+
+  /** Reconnect a saved session on startup (silent no-op if not signed in). */
+  init(): Promise<void>;
+  /** Interactive sign-in (e.g. QR). */
+  login(): Promise<void>;
+  /** Sign out and forget the session. */
+  logout(): Promise<void>;
+  /** Release resources (disconnect, dispose emitters). */
+  dispose(): void;
+
+  /** Whether a chat is currently muted (drives notification suppression). */
+  isChatMuted?(chatId: string): boolean;
 }

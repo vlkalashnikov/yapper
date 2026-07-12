@@ -4,7 +4,7 @@
  * without pulling in the Baileys runtime.
  */
 import type { Contact, WAMessage } from "@whiskeysockets/baileys";
-import { Message } from "../types";
+import { Message, MessageEntity } from "../types";
 
 /** protobuf Long | number | null → a plain number (0 when absent). */
 export function toNum(
@@ -254,6 +254,24 @@ export function chatTitle(
   );
 }
 
+/** WhatsApp renders monospace/code with triple backticks. When a whole message
+ *  is wrapped in them (Share Code, or code from another client), strip them and
+ *  mark it as a `pre` block so it renders as a code block rather than showing
+ *  literal backticks. */
+export function monospaceBlock(text: string): {
+  text: string;
+  entities?: MessageEntity[];
+} {
+  const m = /^```\n?([\s\S]+?)\n?```$/.exec(text);
+  if (m && m[1].length) {
+    return {
+      text: m[1],
+      entities: [{ type: "pre", offset: 0, length: m[1].length }],
+    };
+  }
+  return { text };
+}
+
 /** Map a WhatsApp message into the provider-agnostic model. `mediaPlaceholder`
  *  (localized) is a last-resort text for renderable content we don't recognize;
  *  known media instead surfaces via hasImage/mediaKind/file (+ its caption). */
@@ -267,6 +285,11 @@ export function toMessage(
   const media = mediaInfo(m.message);
   const hasMedia = !!(media.hasImage || media.file);
   const senderId = m.key.participant ?? undefined;
+  // Caption for media; "" when media renders on its own; placeholder only for
+  // unrecognized renderable content.
+  const raw = text || media.caption || (hasMedia ? "" : m.message ? mediaPlaceholder : "");
+  // Recognize a triple-backtick code block (only when it isn't a media caption).
+  const body = !hasMedia && raw ? monospaceBlock(raw) : { text: raw };
   return {
     id: m.key.id ?? "",
     chatId,
@@ -274,9 +297,8 @@ export function toMessage(
       ? ""
       : m.pushName || jidUser(senderId ?? m.key.remoteJid ?? chatId),
     senderId: outgoing ? undefined : senderId,
-    // Caption for media; "" when media renders on its own; placeholder only for
-    // unrecognized renderable content.
-    text: text || media.caption || (hasMedia ? "" : m.message ? mediaPlaceholder : ""),
+    text: body.text,
+    entities: body.entities,
     timestamp: toNum(m.messageTimestamp) * 1000,
     outgoing,
     hasImage: media.hasImage,

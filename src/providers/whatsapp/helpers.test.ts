@@ -11,6 +11,7 @@ import {
   mediaInfo,
   messageText,
   mimeOf,
+  monospaceBlock,
   muteActive,
   toMessage,
   toNum,
@@ -126,6 +127,23 @@ describe("mapStatus", () => {
     expect(mapStatus(5)).toBe("read"); // PLAYED
     expect(mapStatus(null)).toBeUndefined();
     expect(mapStatus(undefined)).toBeUndefined();
+  });
+});
+
+describe("monospaceBlock", () => {
+  it("strips a full triple-backtick wrap into a pre entity", () => {
+    const r = monospaceBlock("```const x = 1;```");
+    expect(r.text).toBe("const x = 1;");
+    expect(r.entities).toEqual([{ type: "pre", offset: 0, length: 12 }]);
+  });
+  it("handles surrounding newlines and multiline code", () => {
+    const r = monospaceBlock("```\nline1\nline2\n```");
+    expect(r.text).toBe("line1\nline2");
+    expect(r.entities?.[0].length).toBe(11);
+  });
+  it("leaves plain text (and partial backticks) untouched", () => {
+    expect(monospaceBlock("hello")).toEqual({ text: "hello" });
+    expect(monospaceBlock("use `x` here")).toEqual({ text: "use `x` here" });
   });
 });
 

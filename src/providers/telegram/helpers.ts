@@ -74,6 +74,18 @@ export function canSendTo(entity: EntityLike): boolean {
   return true;
 }
 
+/** Codicon for a chat, by entity type: person (private), megaphone (broadcast
+ *  channel), or a group icon (basic group / supergroup / forum). */
+export function chatIcon(entity: EntityLike): string {
+  if (entity instanceof Api.User) {
+    return "account";
+  }
+  if (entity instanceof Api.Channel && entity.broadcast) {
+    return "megaphone";
+  }
+  return "organization";
+}
+
 /** Whether a folder's type rules (groups/bots/contacts/…) include an entity. */
 export function matchesFolderFlags(f: Api.DialogFilter, e: EntityLike): boolean {
   if (e instanceof Api.User) {

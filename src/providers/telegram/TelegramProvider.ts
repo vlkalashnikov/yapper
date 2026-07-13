@@ -23,6 +23,7 @@ import { promptCredentials, promptPassword } from "./auth";
 import { QrLoginPanel, QrLoginText } from "../../ui/QrLoginPanel";
 import {
   canSendTo,
+  chatIcon,
   extFromMime,
   extOf,
   isMuted,
@@ -204,6 +205,7 @@ export class TelegramProvider implements Messenger {
         canSend: canSendTo(dialog.entity),
         muted,
         archived: dialog.archived,
+        icon: chatIcon(dialog.entity),
       });
     }
     return chats;

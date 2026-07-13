@@ -28,6 +28,9 @@ export interface Chat {
   phone?: string;
   /** True for a verified business/official account (a badge in the list). */
   verified?: boolean;
+  /** Codicon name for the tree item (e.g. "symbol-number" = # for a channel).
+   *  Falls back to a generic chat icon when unset. */
+  icon?: string;
 }
 
 /** A forum topic (sub-thread) inside a forum group. */
@@ -182,6 +185,11 @@ export interface MessengerProvider {
    *  Discord 2000). Used to cap/split shared code and diffs. Undefined = no
    *  practical limit. */
   readonly maxMessageLength?: number;
+
+  /** When true, the chat tree omits the synthesized "All chats" node — every
+   *  chat is reachable through a folder instead (e.g. Discord groups DMs into a
+   *  "Direct Messages" folder and each server into its own). */
+  readonly groupsOnly?: boolean;
 
   getChats(): Promise<Chat[]>;
   getMessages(chatId: string, topicId?: string): Promise<Message[]>;

@@ -22,7 +22,8 @@ export class ChatTreeItem extends vscode.TreeItem {
     this.tooltip = chatTooltip(chat);
     // The native tree can't reliably render a raster avatar as the item icon
     // (empty slot), so we stay on a themed icon; the avatar lives in the header.
-    this.iconPath = new vscode.ThemeIcon("comment-discussion");
+    // Providers may hint an icon (e.g. Discord "#" channels).
+    this.iconPath = new vscode.ThemeIcon(chat.icon ?? "comment-discussion");
     this.contextValue = chat.isForum ? "yapper.forum" : "yapper.chat";
 
     // Forum chats expand into topics; only leaf chats open directly.
@@ -222,17 +223,19 @@ export class ChatTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       return items;
     }
 
-    // "Все чаты" mirrors Telegram's first tab; it and the custom folders all
-    // start collapsed. Archive, if any, comes last.
-    const allChats: Folder = {
-      id: 0,
-      title: vscode.l10n.t("All chats"),
-      chatIds: active.map((c) => c.id),
-    };
-    const nodes: TreeNode[] = [
-      new FolderTreeItem(allChats),
-      ...nonEmpty.map((f) => new FolderTreeItem(f)),
-    ];
+    // "All chats" mirrors Telegram's first tab; it and the custom folders all
+    // start collapsed. Providers whose folders already cover every chat (Discord:
+    // Direct Messages + one per server) opt out of it via `groupsOnly`.
+    const nodes: TreeNode[] = [];
+    if (!this.provider.groupsOnly) {
+      const allChats: Folder = {
+        id: 0,
+        title: vscode.l10n.t("All chats"),
+        chatIds: active.map((c) => c.id),
+      };
+      nodes.push(new FolderTreeItem(allChats));
+    }
+    nodes.push(...nonEmpty.map((f) => new FolderTreeItem(f)));
     if (archiveNode) {
       nodes.push(archiveNode);
     }

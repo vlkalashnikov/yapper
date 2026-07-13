@@ -61,6 +61,11 @@ interface RawAttachment {
   name?: string | null;
   size?: number;
 }
+/** A message's author/member, for resolving the per-message avatar. */
+interface RawAuthorLike {
+  author?: { id?: string; displayAvatarURL?(o?: { size?: number }): string };
+  member?: { displayAvatarURL?(o?: { size?: number }): string } | null;
+}
 /** The bits of a raw message we read directly (attachment url isn't exposed to
  *  the pure mapper). */
 interface RawMessageLike {
@@ -109,6 +114,9 @@ export class DiscordProvider implements Messenger {
   readonly beta = true;
   readonly historyPageSize = 50;
   readonly maxMessageLength = 2000;
+  // DMs go in a "Direct Messages" folder and each server in its own, so the
+  // tree needs no catch-all "All chats" node.
+  readonly groupsOnly = true;
 
   private client?: Client;
   private open = false;
@@ -126,6 +134,9 @@ export class DiscordProvider implements Messenger {
   /** Attachment (CDN url) per message id, for lazy media loading. Filled when
    *  messages are mapped; Discord attachment urls are directly fetchable. */
   private readonly mediaCache = new Map<string, RawAttachment>();
+  /** Per-author avatar (data URL) by user id — so group/server messages show
+   *  each sender's picture. Cached (incl. misses) to avoid refetching. */
+  private readonly authorAvatars = new Map<string, string | undefined>();
 
   private readonly _onMessage = new vscode.EventEmitter<Message>();
   readonly onMessage = this._onMessage.event;
@@ -205,6 +216,7 @@ export class DiscordProvider implements Messenger {
     this.sentIds.clear();
     this.unreadCounts.clear();
     this.mediaCache.clear();
+    this.authorAvatars.clear();
     await this.storage.clearToken();
     this._onConnectionChange.fire(false);
   }
@@ -254,7 +266,7 @@ export class DiscordProvider implements Messenger {
     );
 
     // --- Realtime ---
-    client.on("messageCreate", (m) => {
+    client.on("messageCreate", async (m) => {
       if (this.client !== client) {
         return;
       }
@@ -265,6 +277,7 @@ export class DiscordProvider implements Messenger {
       }
       const msg = this.mapRealtime(m);
       if (msg) {
+        await this.applyAuthorAvatars([m], [msg]);
         if (!msg.outgoing) {
           // Bump unread; if the user is viewing this chat, markAsRead clears it.
           this.unreadCounts.set(msg.chatId, (this.unreadCounts.get(msg.chatId) ?? 0) + 1);
@@ -360,10 +373,25 @@ export class DiscordProvider implements Messenger {
       return [];
     }
     const known = new Set(chats.map((c) => c.id));
+    const folders: Folder[] = [];
+
+    // Direct Messages (DMs + group DMs) as their own folder, separate from servers.
+    const channels = client.channels.cache as unknown as {
+      values(): Iterable<ChannelLike>;
+    };
+    const dmIds: string[] = [];
+    for (const ch of channels.values()) {
+      if ((ch.type === "DM" || ch.type === "GROUP_DM") && known.has(ch.id)) {
+        dmIds.push(ch.id);
+      }
+    }
+    if (dmIds.length) {
+      folders.push({ id: 1, title: vscode.l10n.t("Direct Messages"), chatIds: dmIds });
+    }
+
     const guilds = client.guilds.cache as unknown as {
       values(): Iterable<GuildLike>;
     };
-    const folders: Folder[] = [];
     for (const g of guilds.values()) {
       const chatIds: string[] = [];
       for (const ch of g.channels.cache.values()) {
@@ -579,21 +607,29 @@ export class DiscordProvider implements Messenger {
   // --- internals ---
 
   private dmChat(ch: ChannelLike): Chat {
-    const title =
-      ch.type === "GROUP_DM"
-        ? ch.name || vscode.l10n.t("Group chat")
-        : ch.recipient
-        ? ch.recipient.globalName || ch.recipient.username
-        : ch.id;
-    return { id: ch.id, title, unreadCount: this.unreadCounts.get(ch.id) };
+    const isGroup = ch.type === "GROUP_DM";
+    const title = isGroup
+      ? ch.name || vscode.l10n.t("Group chat")
+      : ch.recipient
+      ? ch.recipient.globalName || ch.recipient.username
+      : ch.id;
+    return {
+      id: ch.id,
+      title,
+      unreadCount: this.unreadCounts.get(ch.id),
+      icon: isGroup ? "organization" : "account",
+    };
   }
 
   private guildChat(ch: ChannelLike): Chat {
+    const isForum = ch.type === "GUILD_FORUM";
     return {
       id: ch.id,
       title: ch.name || ch.id,
-      isForum: ch.type === "GUILD_FORUM" || undefined,
+      isForum: isForum || undefined,
       unreadCount: this.unreadCounts.get(ch.id),
+      // Text/news channels get Discord's "#" glyph; forums stay expandable.
+      icon: isForum ? undefined : "symbol-number",
     };
   }
 
@@ -634,6 +670,7 @@ export class DiscordProvider implements Messenger {
         // One malformed message shouldn't drop the whole page.
       }
     }
+    await this.applyAuthorAvatars(raws, msgs);
     // Discord returns newest-first; the UI wants oldest-first.
     msgs.sort((a, b) => a.timestamp - b.timestamp);
     return msgs;
@@ -650,6 +687,40 @@ export class DiscordProvider implements Messenger {
       m.attachments?.first() ?? m.messageSnapshots?.first()?.attachments?.first();
     if (att?.url) {
       this.mediaCache.set(m.id, att);
+    }
+  }
+
+  /** Fetch each message author's avatar (deduped, cached) and set it on the
+   *  mapped messages, so group/server chats show real sender pictures. */
+  private async applyAuthorAvatars(raws: unknown[], msgs: Message[]): Promise<void> {
+    const toFetch = new Map<string, string>();
+    for (const raw of raws) {
+      const r = raw as RawAuthorLike;
+      const id = r.author?.id;
+      if (!id || this.authorAvatars.has(id) || toFetch.has(id)) {
+        continue;
+      }
+      const url =
+        r.member?.displayAvatarURL?.({ size: 64 }) ??
+        r.author?.displayAvatarURL?.({ size: 64 });
+      if (url) {
+        toFetch.set(id, url);
+      } else {
+        this.authorAvatars.set(id, undefined);
+      }
+    }
+    await Promise.all(
+      [...toFetch].map(async ([id, url]) => {
+        this.authorAvatars.set(id, await fetchAsDataUrl(url));
+      })
+    );
+    for (const msg of msgs) {
+      if (msg.senderId && !msg.avatar) {
+        const avatar = this.authorAvatars.get(msg.senderId);
+        if (avatar) {
+          msg.avatar = avatar;
+        }
+      }
     }
   }
 

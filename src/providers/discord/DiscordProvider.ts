@@ -40,6 +40,7 @@ interface ChannelLike {
   guild?: { iconURL(): string | null };
   messages?: MessagesLike;
   threads?: { fetchActive(): Promise<{ threads: { values(): Iterable<ThreadLike> } }> };
+  send?(options: unknown): Promise<unknown>;
 }
 interface GuildLike {
   id: string;
@@ -404,6 +405,95 @@ export class DiscordProvider implements Messenger {
     const data = url ? await fetchAsDataUrl(url) : undefined;
     this.avatars.set(chatId, data);
     return data;
+  }
+
+  // --- Sending ---
+
+  async sendMessage(
+    chatId: string,
+    text: string,
+    replyToId?: string,
+    topicId?: string
+  ): Promise<Message> {
+    return this.send(chatId, topicId, {
+      content: text,
+      ...(replyToId
+        ? { reply: { messageReference: replyToId, failIfNotExists: false } }
+        : {}),
+    });
+  }
+
+  async sendCode(
+    chatId: string,
+    text: string,
+    language?: string,
+    topicId?: string
+  ): Promise<Message> {
+    // Fenced code block; the returned message maps back through toMessage, which
+    // parses the fence into a `pre` entity (the webview renders a code block).
+    const fenced = "```" + (language ?? "") + "\n" + text + "\n```";
+    return this.send(chatId, topicId, { content: fenced });
+  }
+
+  async sendFile(
+    chatId: string,
+    filePath: string,
+    filename?: string,
+    topicId?: string
+  ): Promise<Message> {
+    return this.send(chatId, topicId, {
+      files: [{ attachment: filePath, name: filename }],
+    });
+  }
+
+  async sendImage(
+    chatId: string,
+    filePath: string,
+    caption?: string,
+    topicId?: string
+  ): Promise<Message> {
+    return this.send(chatId, topicId, {
+      ...(caption ? { content: caption } : {}),
+      files: [{ attachment: filePath }],
+    });
+  }
+
+  /** Resolve the target channel/thread, send, and map the created message
+   *  (recording its id so its realtime echo is swallowed). */
+  private async send(
+    chatId: string,
+    topicId: string | undefined,
+    payload: unknown
+  ): Promise<Message> {
+    const target = await this.resolveChannel(topicId ?? chatId);
+    if (!target?.send) {
+      throw new Error(vscode.l10n.t("Not connected to Discord"));
+    }
+    let sent: unknown;
+    try {
+      sent = await target.send(payload);
+    } catch (err) {
+      // Discord CAPTCHA-gates sends from self-bots (especially new devices).
+      // Surface an actionable message instead of the raw solver error.
+      if (/CAPTCHA/i.test((err as Error)?.message ?? "")) {
+        throw new Error(
+          vscode.l10n.t(
+            "Discord asked for a CAPTCHA to send from here. Send one message from the official Discord app first to trust this device, then try again."
+          )
+        );
+      }
+      throw err;
+    }
+    const s = sent as { id?: string };
+    if (s.id) {
+      this.sentIds.add(s.id);
+    }
+    const msg = toMessage(sent as DiscordMessageLike, this.client?.user?.id);
+    if (topicId) {
+      msg.chatId = chatId;
+      msg.topicId = topicId;
+    }
+    return msg;
   }
 
   /** Clear a chat's unread (opening/viewing it). Client-side only — Discord has

@@ -283,7 +283,10 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showWarningMessage(vscode.l10n.t("Yapper: nothing to send"));
         return;
       }
-      await conversation.shareCode(capCode(text), editor.document.languageId);
+      await conversation.shareCode(
+        capCode(text, active.maxMessageLength ?? DEFAULT_MAX),
+        editor.document.languageId
+      );
     }),
 
     vscode.commands.registerCommand("yapper.shareLocation", async () => {
@@ -330,7 +333,10 @@ export function activate(context: vscode.ExtensionContext): void {
         );
         return;
       }
-      await conversation.shareCode(capCode(diff), "diff");
+      await conversation.shareCode(
+        capCode(diff, active.maxMessageLength ?? DEFAULT_MAX),
+        "diff"
+      );
     }),
 
     vscode.commands.registerCommand("yapper.shareCommit", async () => {
@@ -428,14 +434,17 @@ function formatCommit(c: GitCommit): string {
   return [`📌 ${short} — ${subject}`, meta, body].filter(Boolean).join("\n");
 }
 
-const TELEGRAM_MAX = 4096;
+/** Fallback message limit for providers that don't declare one. */
+const DEFAULT_MAX = 4096;
 
-/** Truncate code to fit Telegram's message limit, noting when it was cut. */
-function capCode(text: string): string {
-  if (text.length <= TELEGRAM_MAX - 16) {
+/** Truncate code to fit the active messenger's limit, noting when it was cut.
+ *  The margin leaves room for the code-fence wrapping the provider adds. */
+function capCode(text: string, max: number): string {
+  const limit = max - 24;
+  if (text.length <= limit) {
     return text;
   }
-  return `${text.slice(0, TELEGRAM_MAX - 16)}\n… ${vscode.l10n.t("(truncated)")}`;
+  return `${text.slice(0, limit)}\n… ${vscode.l10n.t("(truncated)")}`;
 }
 
 /** A short one-line preview of a message for a notification toast. */

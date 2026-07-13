@@ -5,3 +5,7 @@ out/
 .DS_Store
 *.log
 .vscode-test/
+
+# Raw screen captures used to produce README media (keep out of git; only the
+# processed images under docs/media/ are committed).
+docs/media/raw/

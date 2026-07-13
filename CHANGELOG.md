@@ -3,6 +3,14 @@
 All notable changes to the Yapper extension are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.1.2] - 2026-07-13
+
+### Changed
+
+- Revamped the README: a branded banner, local (self-contained) badges, a
+  Telegram vs WhatsApp capability comparison table, and separate per-messenger
+  sections. Added media — a Telegram screenshot and an editor-sharing GIF.
+
 ## [1.1.1] - 2026-07-13
 
 ### Added

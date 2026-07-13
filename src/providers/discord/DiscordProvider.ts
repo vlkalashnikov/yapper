@@ -1,8 +1,14 @@
 import * as vscode from "vscode";
 import type { Client } from "discord.js-selfbot-youtsuho-v13";
-import type { Chat, Folder, Message, Messenger, Topic } from "../types";
+import type { Chat, Folder, MediaFile, Message, Messenger, Topic } from "../types";
 import { DiscordStorage } from "./storage";
-import { toMessage, guildFolderId, DiscordMessageLike } from "./helpers";
+import {
+  toMessage,
+  guildFolderId,
+  attachmentInfo,
+  extFromMime,
+  DiscordMessageLike,
+} from "./helpers";
 import { QrLoginPanel, QrLoginText } from "../../ui/QrLoginPanel";
 
 /** Guild channel types we surface as chats (text-ish); voice/categories skipped. */
@@ -46,6 +52,23 @@ interface GuildLike {
   id: string;
   name: string;
   channels: { cache: { values(): Iterable<ChannelLike> } };
+}
+/** A message attachment as we cache it for lazy media loading. */
+interface RawAttachment {
+  url: string;
+  proxyURL?: string;
+  contentType?: string | null;
+  name?: string | null;
+  size?: number;
+}
+/** The bits of a raw message we read directly (attachment url isn't exposed to
+ *  the pure mapper). */
+interface RawMessageLike {
+  id?: string;
+  attachments?: { first(): RawAttachment | undefined };
+  messageSnapshots?: {
+    first(): { attachments?: { first(): RawAttachment | undefined } } | undefined;
+  };
 }
 
 type DiscordLib = typeof import("discord.js-selfbot-youtsuho-v13");
@@ -100,6 +123,9 @@ export class DiscordProvider implements Messenger {
    *  Client-side only (Discord's read state isn't synced back); starts empty
    *  each session, so it tracks messages seen while running, not historical. */
   private readonly unreadCounts = new Map<string, number>();
+  /** Attachment (CDN url) per message id, for lazy media loading. Filled when
+   *  messages are mapped; Discord attachment urls are directly fetchable. */
+  private readonly mediaCache = new Map<string, RawAttachment>();
 
   private readonly _onMessage = new vscode.EventEmitter<Message>();
   readonly onMessage = this._onMessage.event;
@@ -178,6 +204,7 @@ export class DiscordProvider implements Messenger {
     this.guildIds.clear();
     this.sentIds.clear();
     this.unreadCounts.clear();
+    this.mediaCache.clear();
     await this.storage.clearToken();
     this._onConnectionChange.fire(false);
   }
@@ -282,6 +309,7 @@ export class DiscordProvider implements Messenger {
   private mapRealtime(m: unknown): Message | undefined {
     try {
       const msg = toMessage(m as unknown as DiscordMessageLike, this.client?.user?.id);
+      this.cacheAttachment(m);
       const raw = m as unknown as {
         channel?: { isThread?(): boolean; parentId?: string | null };
       };
@@ -405,6 +433,48 @@ export class DiscordProvider implements Messenger {
     const data = url ? await fetchAsDataUrl(url) : undefined;
     this.avatars.set(chatId, data);
     return data;
+  }
+
+  /** A lightweight image preview (resized via Discord's media proxy). Video/
+   *  other kinds have no cheap thumbnail — the UI shows a play badge instead. */
+  async getMedia(_chatId: string, messageId: string): Promise<string | undefined> {
+    const ref = this.mediaCache.get(messageId);
+    if (!ref || !(ref.contentType ?? "").startsWith("image/")) {
+      return undefined;
+    }
+    const base = ref.proxyURL || ref.url;
+    const sep = base.includes("?") ? "&" : "?";
+    return fetchAsDataUrl(`${base}${sep}width=400`);
+  }
+
+  /** Download the full attachment for the lightbox / a file save. */
+  async getMediaFile(
+    _chatId: string,
+    messageId: string
+  ): Promise<MediaFile | undefined> {
+    const ref = this.mediaCache.get(messageId);
+    if (!ref) {
+      return undefined;
+    }
+    try {
+      const res = await fetch(ref.url);
+      if (!res.ok) {
+        return undefined;
+      }
+      const data = new Uint8Array(await res.arrayBuffer());
+      const mime = ref.contentType ?? res.headers.get("content-type") ?? "application/octet-stream";
+      const info = attachmentInfo(ref);
+      const kind: MediaFile["kind"] = info.hasImage
+        ? info.mediaKind === "video" || info.mediaKind === "gif"
+          ? "video"
+          : "image"
+        : "file";
+      const extension = ref.name?.split(".").pop()?.toLowerCase() || extFromMime(mime);
+      const filename = ref.name || `file.${extension}`;
+      return { data, filename, extension, mime, kind };
+    } catch {
+      return undefined;
+    }
   }
 
   // --- Sending ---
@@ -558,6 +628,7 @@ export class DiscordProvider implements Messenger {
           msg.chatId = chatId;
           msg.topicId = topicId;
         }
+        this.cacheAttachment(raw);
         msgs.push(msg);
       } catch {
         // One malformed message shouldn't drop the whole page.
@@ -566,6 +637,20 @@ export class DiscordProvider implements Messenger {
     // Discord returns newest-first; the UI wants oldest-first.
     msgs.sort((a, b) => a.timestamp - b.timestamp);
     return msgs;
+  }
+
+  /** Remember a message's first attachment (own, or a forward's) so getMedia /
+   *  getMediaFile can fetch it later by message id. */
+  private cacheAttachment(raw: unknown): void {
+    const m = raw as RawMessageLike;
+    if (!m.id) {
+      return;
+    }
+    const att =
+      m.attachments?.first() ?? m.messageSnapshots?.first()?.attachments?.first();
+    if (att?.url) {
+      this.mediaCache.set(m.id, att);
+    }
   }
 
   private async resolveChannel(id: string): Promise<ChannelLike | undefined> {

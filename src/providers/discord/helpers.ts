@@ -170,20 +170,22 @@ export function toMessage(m: DiscordMessageLike, meId?: string): Message {
   if (parsed.entities.length) {
     msg.entities = parsed.entities;
   }
-  if (!msg.text) {
-    // Attachment-only message: a placeholder until real media lands (Phase 6).
-    const att = src.attachments?.first();
-    if (att) {
-      const info = attachmentInfo(att);
-      msg.text = info.hasImage
-        ? info.mediaKind === "video" || info.mediaKind === "gif"
-          ? "🎥 Video"
-          : "🖼 Image"
-        : `📎 ${info.file?.name ?? "file"}`;
-    } else if (m.type && SYSTEM_TEXT[m.type]) {
-      // System messages (joins, boosts, pins…) carry no body — label by type.
-      msg.text = SYSTEM_TEXT[m.type];
+  // Media model (independent of text — a message can have a caption + file).
+  const att = src.attachments?.first();
+  if (att) {
+    const info = attachmentInfo(att);
+    if (info.hasImage) {
+      msg.hasImage = true;
+      if (info.mediaKind) {
+        msg.mediaKind = info.mediaKind;
+      }
+    } else if (info.file) {
+      msg.file = info.file;
     }
+  }
+  // System messages (joins, boosts, pins…) carry no body or media — label by type.
+  if (!msg.text && !msg.hasImage && !msg.file && m.type && SYSTEM_TEXT[m.type]) {
+    msg.text = SYSTEM_TEXT[m.type];
   }
   if (m.editedTimestamp) {
     msg.edited = true;

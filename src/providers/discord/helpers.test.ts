@@ -135,19 +135,29 @@ describe("toMessage", () => {
     expect(msg.entities).toEqual([{ type: "bold", offset: 12, length: 7 }]);
   });
 
-  it("shows a placeholder for attachment-only messages", () => {
+  it("maps attachment-only messages to media fields", () => {
     const img = toMessage({
       ...base,
       content: "",
       attachments: { size: 1, first: () => ({ contentType: "image/png", name: "a.png" }) },
     });
-    expect(img.text).toBe("🖼 Image");
+    expect(img).toMatchObject({ text: "", hasImage: true, mediaKind: "photo" });
     const doc = toMessage({
       ...base,
       content: "",
-      attachments: { size: 1, first: () => ({ contentType: "application/pdf", name: "r.pdf" }) },
+      attachments: { size: 1, first: () => ({ contentType: "application/pdf", name: "r.pdf", size: 9 }) },
     });
-    expect(doc.text).toBe("📎 r.pdf");
+    expect(doc.file).toEqual({ name: "r.pdf", size: 9 });
+  });
+
+  it("keeps a caption alongside an image attachment", () => {
+    const msg = toMessage({
+      ...base,
+      content: "nice",
+      attachments: { size: 1, first: () => ({ contentType: "image/png", name: "a.png" }) },
+    });
+    expect(msg.text).toBe("nice");
+    expect(msg.hasImage).toBe(true);
   });
 
   it("extracts text from a Components V2 tree (Container → Section → TextDisplay)", () => {

@@ -54,6 +54,9 @@
   let currentCanSend = true;
   // Whether the active provider supports profile cards (Telegram: yes).
   let currentCanProfile = true;
+  // Provider capabilities (search / shared media / mute), so the profile card
+  // only shows buttons the active messenger actually supports.
+  let currentCaps = {};
   let chatAvatar = null;
   let lastDay = null;
   // Full history currently held, oldest-first. Re-rendered on pagination.
@@ -183,8 +186,11 @@
   function makeLink(url, text) {
     const a = document.createElement("a");
     a.className = "link";
-    a.href = url;
+    // Not a real href: VS Code's webview opens href links itself, which would
+    // double up with our openLink handler. Keep the URL in dataset/title only.
+    a.href = "#";
     a.dataset.url = url;
+    a.title = url;
     a.textContent = text;
     return a;
   }
@@ -349,8 +355,13 @@
     if (link) {
       const a = document.createElement("a");
       a.className = "link";
-      a.href = link.url;
-      a.dataset.url = link.url;
+      // href "#" so VS Code's webview doesn't also open it (double tab); the
+      // real URL lives in dataset.url for our openLink handler.
+      a.href = "#";
+      if (link.url) {
+        a.dataset.url = link.url;
+        a.title = link.url;
+      }
       a.append(node);
       node = a;
     }
@@ -1122,10 +1133,14 @@
       pfCard.append(pfRow(p.subtitle, "pf-subtitle"));
     }
     if (p.username) {
-      const u = document.createElement("a");
-      u.className = "pf-username link";
+      // Clickable only when the provider gives a profile URL (Telegram t.me);
+      // otherwise (Discord) it's plain text — no link to a wrong site.
+      const u = document.createElement(p.usernameUrl ? "a" : "span");
+      u.className = p.usernameUrl ? "pf-username link" : "pf-username";
       u.textContent = "@" + p.username;
-      u.dataset.url = "https://t.me/" + p.username;
+      if (p.usernameUrl) {
+        u.dataset.url = p.usernameUrl;
+      }
       pfCard.append(u);
     }
 
@@ -1133,31 +1148,37 @@
     // for another user's profile (from a group message) show info only.
     const forCurrentChat = chatId === currentChatId;
 
-    // Action buttons: mute/unmute toggle + search in chat.
+    // Action buttons: mute/unmute toggle + search — only those the provider
+    // supports (Discord, for now, has neither).
     const actions = document.createElement("div");
     actions.className = "pf-actions";
-    const muteBtn = document.createElement("button");
-    muteBtn.className = "pf-btn";
-    const setMuteLabel = () => {
-      muteBtn.textContent = p.muted
-        ? "🔔 " + (L.unmute || "Unmute")
-        : "🔕 " + (L.mute || "Mute");
-    };
-    setMuteLabel();
-    muteBtn.addEventListener("click", () => {
-      p.muted = !p.muted;
+    if (currentCaps.mute) {
+      const muteBtn = document.createElement("button");
+      muteBtn.className = "pf-btn";
+      const setMuteLabel = () => {
+        muteBtn.textContent = p.muted
+          ? "🔔 " + (L.unmute || "Unmute")
+          : "🔕 " + (L.mute || "Mute");
+      };
       setMuteLabel();
-      vscode.postMessage({ type: "setMuted", chatId: chatId, muted: p.muted });
-    });
-    const searchBtn = document.createElement("button");
-    searchBtn.className = "pf-btn";
-    searchBtn.textContent = "🔍 " + (L.search || "Search");
-    searchBtn.addEventListener("click", () => {
-      closeProfile();
-      vscode.postMessage({ type: "searchChat" });
-    });
-    actions.append(muteBtn, searchBtn);
-    if (forCurrentChat) {
+      muteBtn.addEventListener("click", () => {
+        p.muted = !p.muted;
+        setMuteLabel();
+        vscode.postMessage({ type: "setMuted", chatId: chatId, muted: p.muted });
+      });
+      actions.append(muteBtn);
+    }
+    if (currentCaps.search) {
+      const searchBtn = document.createElement("button");
+      searchBtn.className = "pf-btn";
+      searchBtn.textContent = "🔍 " + (L.search || "Search");
+      searchBtn.addEventListener("click", () => {
+        closeProfile();
+        vscode.postMessage({ type: "searchChat" });
+      });
+      actions.append(searchBtn);
+    }
+    if (forCurrentChat && actions.children.length) {
       pfCard.append(actions);
     }
 
@@ -1188,10 +1209,10 @@
       pfCard.append(inv);
     }
 
-    // Shared media / files tabs (current chat only).
+    // Shared media / files tabs (current chat only, if the provider has them).
     profileChatId = chatId;
     activeSharedTab = null;
-    if (forCurrentChat) {
+    if (forCurrentChat && currentCaps.sharedMedia) {
       const tabs = document.createElement("div");
       tabs.className = "pf-tabs";
       tabs.append(
@@ -1651,6 +1672,7 @@
         showError(msg.chat, msg.message);
         break;
       case "load":
+        currentCaps = msg.caps || {};
         load(
           msg.chat,
           msg.messages,

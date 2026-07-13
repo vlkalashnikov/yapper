@@ -1,6 +1,14 @@
 import * as vscode from "vscode";
 import type { Client } from "discord.js-selfbot-youtsuho-v13";
-import type { Chat, Folder, MediaFile, Message, Messenger, Topic } from "../types";
+import type {
+  Chat,
+  Folder,
+  MediaFile,
+  Message,
+  Messenger,
+  Profile,
+  Topic,
+} from "../types";
 import { DiscordStorage } from "./storage";
 import {
   toMessage,
@@ -60,6 +68,28 @@ interface RawAttachment {
   contentType?: string | null;
   name?: string | null;
   size?: number;
+}
+/** User fields we read for a profile card. */
+interface ProfileUserLike {
+  username: string;
+  globalName?: string | null;
+  discriminator?: string;
+  bio?: string | null;
+  displayAvatarURL?(o?: { size?: number }): string;
+}
+/** Channel fields we read for a profile card. */
+interface ProfileChannelLike {
+  type: string;
+  name?: string | null;
+  topic?: string | null;
+  recipient?: ProfileUserLike;
+  recipients?: { size?: number };
+  iconURL?(o?: { size?: number }): string | null;
+  guild?: {
+    name?: string;
+    memberCount?: number;
+    iconURL?(o?: { size?: number }): string | null;
+  };
 }
 /** A message's author/member, for resolving the per-message avatar. */
 interface RawAuthorLike {
@@ -463,6 +493,63 @@ export class DiscordProvider implements Messenger {
     return data;
   }
 
+  /** Profile card for a DM (the recipient), group DM, guild channel, or a
+   *  sender (a user id, e.g. clicking an author in a server channel). */
+  async getProfile(id: string): Promise<Profile | undefined> {
+    const client = this.client;
+    if (!client) {
+      return undefined;
+    }
+    const cached = client.channels.cache.get(id);
+    const ch = (cached ??
+      (await client.channels.fetch(id).catch(() => null))) as unknown as
+      | ProfileChannelLike
+      | null;
+
+    if (ch?.type === "DM" && ch.recipient) {
+      return this.userProfile(ch.recipient);
+    }
+    if (ch?.type === "GROUP_DM") {
+      return {
+        kind: "group",
+        title: ch.name || vscode.l10n.t("Group chat"),
+        subtitle: memberSubtitle(ch.recipients?.size),
+        avatar: await toDataUrl(ch.iconURL?.({ size: 256 })),
+      };
+    }
+    if (ch?.guild) {
+      return {
+        kind: "channel",
+        title: "#" + (ch.name ?? ""),
+        bio: ch.topic || undefined,
+        subtitle:
+          [ch.guild.name, memberSubtitle(ch.guild.memberCount)]
+            .filter(Boolean)
+            .join(" · ") || undefined,
+        avatar: await toDataUrl(ch.guild.iconURL?.({ size: 256 })),
+      };
+    }
+    const user = (await client.users.fetch(id).catch(() => undefined)) as unknown as
+      | ProfileUserLike
+      | undefined;
+    return user ? this.userProfile(user) : undefined;
+  }
+
+  private async userProfile(u: ProfileUserLike): Promise<Profile> {
+    // The webview prepends "@" itself, so store the bare handle.
+    const handle =
+      u.discriminator && u.discriminator !== "0"
+        ? `${u.username}#${u.discriminator}`
+        : u.username;
+    return {
+      kind: "user",
+      title: u.globalName || u.username,
+      username: handle,
+      bio: u.bio || undefined,
+      avatar: await toDataUrl(u.displayAvatarURL?.({ size: 256 })),
+    };
+  }
+
   /** A lightweight image preview (resized via Discord's media proxy). Video/
    *  other kinds have no cheap thumbnail — the UI shows a play badge instead. */
   async getMedia(_chatId: string, messageId: string): Promise<string | undefined> {
@@ -736,6 +823,16 @@ export class DiscordProvider implements Messenger {
     const fetched = await client.channels.fetch(id).catch(() => null);
     return (fetched ?? undefined) as unknown as ChannelLike | undefined;
   }
+}
+
+/** Fetch an (optional) URL as a data URL — for profile avatars/icons. */
+async function toDataUrl(url?: string | null): Promise<string | undefined> {
+  return url ? fetchAsDataUrl(url) : undefined;
+}
+
+/** Localized "N members" subtitle, or undefined when unknown. */
+function memberSubtitle(count?: number): string | undefined {
+  return count ? vscode.l10n.t("{0} members", count) : undefined;
 }
 
 /** Fetch a URL and return it as a base64 data URL (for avatars/media), or

@@ -115,6 +115,13 @@ describe("parseDiscordMarkdown — quotes and links", () => {
     });
   });
 
+  it("image markdown ![alt](url) renders as a masked link", () => {
+    expect(parseDiscordMarkdown("![Review Stack](https://x.io/s)")).toEqual({
+      text: "Review Stack",
+      entities: [{ type: "link", offset: 0, length: 12, url: "https://x.io/s" }],
+    });
+  });
+
   it("bare autolink with correct offset and no trailing punctuation", () => {
     const r = parseDiscordMarkdown("see https://x.io now");
     expect(r.text).toBe("see https://x.io now");

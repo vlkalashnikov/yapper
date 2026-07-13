@@ -85,6 +85,7 @@ function matchConstruct(
     paired(input, i, "~~", "strikethrough", resolve) ??
     paired(input, i, "*", "italic", resolve) ??
     italicUnderscore(input, i, resolve) ??
+    imageMd(input, i, resolve) ??
     linkMd(input, i, resolve) ??
     autolink(input, i) ??
     mention(input, i, resolve)
@@ -279,6 +280,23 @@ function quoteMatch(len: number, inner: ParsedText): Match {
       ...inner.entities,
     ],
   };
+}
+
+/** `![alt](url)` — Discord can't inline markdown images, so render it as a
+ *  masked link (alt text → url), consuming the leading "!". */
+function imageMd(
+  input: string,
+  i: number,
+  resolve?: MentionResolver
+): Match | null {
+  if (input[i] !== "!" || input[i + 1] !== "[") {
+    return null;
+  }
+  const link = linkMd(input, i + 1, resolve);
+  if (!link) {
+    return null;
+  }
+  return { len: link.len + 1, text: link.text, entities: link.entities };
 }
 
 /** `[text](url)` — the visible text may itself be formatted. */

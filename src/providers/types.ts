@@ -71,8 +71,11 @@ export interface Profile {
   kind: "user" | "group" | "channel";
   /** Display name / chat title. */
   title: string;
-  /** @username, if any. */
+  /** @username, if any (without the leading "@" — the UI adds it). */
   username?: string;
+  /** Public URL the username links to (e.g. Telegram t.me/…). When absent, the
+   *  username renders as plain text (Discord has no such public link). */
+  usernameUrl?: string;
   /** Bio (user) or description (group/channel). */
   bio?: string;
   /** Phone number, for contacts. */

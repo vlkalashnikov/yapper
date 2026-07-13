@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { Chat, MediaFile, Message, MessengerProvider } from "../providers/types";
+import { Chat, MediaFile, Message, MessengerProvider, Profile } from "../providers/types";
 import { parseTelegramLink } from "../util/telegramLinks";
 
 /**
@@ -63,6 +63,11 @@ export class ConversationPanel {
           unreadCount: chat.unreadCount ?? 0,
           canSend: chat.canSend !== false,
           canProfile: !!this.provider.getProfile,
+          caps: {
+            search: !!this.provider.searchMessages,
+            sharedMedia: !!this.provider.getSharedMedia,
+            mute: !!this.provider.setMuted,
+          },
         });
         // Fetch the avatar off the critical path: it streams into the header
         // when ready, so a slow/stalled picture request never blocks the load.
@@ -371,8 +376,14 @@ export class ConversationPanel {
       void this.panel?.webview.postMessage({ type: "profileError" });
       return;
     }
-    const profile = await this.provider.getProfile(targetId);
+    let profile: Profile | undefined;
+    try {
+      profile = await this.provider.getProfile(targetId);
+    } catch (err) {
+      console.error("[Yapper] getProfile failed:", err);
+    }
     if (!profile) {
+      // Dismiss the optimistic spinner on failure instead of hanging forever.
       void this.panel?.webview.postMessage({ type: "profileError" });
       void vscode.window.showWarningMessage(
         vscode.l10n.t("Yapper: profile unavailable")

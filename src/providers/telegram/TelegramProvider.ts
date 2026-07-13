@@ -677,6 +677,7 @@ export class TelegramProvider implements Messenger {
             entity.username ||
             "—",
           username: entity.username || undefined,
+          usernameUrl: entity.username ? `https://t.me/${entity.username}` : undefined,
           bio: full.fullUser.about || undefined,
           phone: entity.phone ? `+${entity.phone}` : undefined,
           subtitle: userStatusText(entity.status),
@@ -693,6 +694,7 @@ export class TelegramProvider implements Messenger {
           kind: entity.broadcast ? "channel" : "group",
           title: entity.title,
           username: entity.username || undefined,
+          usernameUrl: entity.username ? `https://t.me/${entity.username}` : undefined,
           bio: fc.about || undefined,
           subtitle: membersText(count, entity.broadcast === true),
           inviteLink: inviteLinkOf(fc.exportedInvite),

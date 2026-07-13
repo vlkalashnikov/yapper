@@ -3,6 +3,30 @@
 All notable changes to the Yapper extension are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.0] - 2026-07-14
+
+### Added
+
+- **Discord** provider (text-first, **BETA**) via a `discord.js-selfbot` fork:
+  QR sign-in as your **own account** (not a bot), so DMs, group DMs and servers
+  appear in the editor. Servers show as folders, forum channels expand into
+  threads; history with pagination.
+- Realtime send / receive, edits and deletes, and a per-session unread badge.
+- Rich Discord text renders — markdown (incl. headings), mentions, custom emoji,
+  **forwards**, **embeds**, and modern **Components V2** bot messages — plus
+  incoming media (image previews, lightbox, downloads).
+- **Editor sharing** (Send Code / File / Diff / Commit / Line) works into
+  Discord, same as Telegram and WhatsApp.
+- Message-length capping is now per-provider (`maxMessageLength`; Discord 2000,
+  Telegram 4096) instead of a hardcoded limit.
+
+### Notes
+
+- Automating a **user account** violates Discord's Terms of Service (ban risk),
+  and Discord CAPTCHA-gates sending from new devices — sending is best-effort
+  (warm up the device from the official app first). Search, profiles and mute
+  are still to come.
+
 ## [1.1.2] - 2026-07-13
 
 ### Changed

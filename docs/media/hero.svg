@@ -51,8 +51,14 @@
       <text x="126" y="22" fill="#6f7b93" font-size="13" font-weight="700">BETA</text>
     </g>
     <g transform="translate(332,0)">
-      <rect x="0" y="0" width="250" height="34" rx="17" fill="#151d31" stroke="#26324e"/>
-      <text x="20" y="22" fill="#6f7b93">＋ Slack · Discord · Teams</text>
+      <rect x="0" y="0" width="162" height="34" rx="17" fill="#1c2740" stroke="#2b3a5c"/>
+      <circle cx="22" cy="17" r="6" fill="#5865F2"/>
+      <text x="38" y="22" fill="#dfe6f2">Discord</text>
+      <text x="112" y="22" fill="#6f7b93" font-size="13" font-weight="700">BETA</text>
+    </g>
+    <g transform="translate(508,0)">
+      <rect x="0" y="0" width="176" height="34" rx="17" fill="#151d31" stroke="#26324e"/>
+      <text x="20" y="22" fill="#6f7b93">＋ Slack · Teams</text>
     </g>
   </g>
 

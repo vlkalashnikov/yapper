@@ -1,6 +1,5 @@
 # Не делать до версии 1.0
 
-- Discord
 - AI
 - GitHub
 - Jira
@@ -20,3 +19,7 @@
   Сделаны в v1.1: пагинация истории (ADR-011), read-receipts (ADR-012),
   read-only mute (ADR-013), editor-парити `sendCode`/`sendFile` (ADR-014),
   входящие медиа (ADR-016), аватары (ADR-017).
+- Discord: search, профили, mute, история непрочитанного, poll/reactions.
+  Провайдер добавлен в v1.2 (BETA, self-bot по QR — ADR-019/020): чаты/серверы/
+  треды, история, realtime, богатый рендер (markdown/embeds/Components V2/
+  форварды/системные), медиа, editor-шаринг.

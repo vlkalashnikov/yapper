@@ -539,3 +539,67 @@ Selection/Diff/File бросали «not supported»).
 - у WhatsApp сгенерированной миниатюры может не быть (media-пиры `sharp`/`jimp`
   externalized, см. ADR-016), но своё превью берётся из локального файла, так
   что показывается всегда; у собеседника фото уходит корректно.
+
+---
+
+# ADR-019
+
+## Discord: user-аккаунт (self-bot) по QR, а не бот
+
+Discord подключаем через **user-аккаунт** (self-bot), а не bot-токен. Только так
+видны личные DM, группы и серверы «как ты сам» — что и есть вижен Yapper. Bot ≠
+пользователь: бот видит лишь каналы, куда добавлен, и не имеет доступа к твоим
+перепискам.
+
+Библиотека — **`discord.js-selfbot-youtsuho-v13`** (активный форк
+`discord.js-selfbot-v13`, который автор пометил deprecated/archived). Официальный
+`discord.js` user-токены не поддерживает. Вход — QR remote-auth
+(`DiscordAuthWebsocket`), рендерится через провайдеро-нейтральный `QrLoginPanel`
+(как Telegram/WhatsApp); токен в SecretStorage (как ADR-003).
+
+Риски (приняты осознанно, как с WhatsApp/Baileys, ADR-010):
+
+- **Ban-risk** — автоматизация user-аккаунта против ToS Discord. Тег **BETA**,
+  явное предупреждение.
+- **Хрупкость либы** — неофициальная, может ломаться на апдейтах Discord.
+- **CAPTCHA на отправку** — Discord гейтит отправку от self-bot (особенно с
+  нового устройства) через hCaptcha, а решателя у нас нет. Отправка —
+  **best-effort**: ловим ошибку и показываем подсказку «отправь раз из офиц.
+  клиента, чтобы прогреть устройство». Платный/ручной решатель не подключаем.
+
+---
+
+# ADR-020
+
+## Discord: маппинг данных и minify-фикс `keepNames`
+
+Провайдер (`providers/discord/`) реализует `Messenger`, маппит Discord в общую
+модель (ADR-004/009); UI не меняется. Ключевое:
+
+- **Серверы → папки** (`getFolders`), текст-каналы → `Chat`, форум-треды →
+  `Topic` (`getTopics`). `Folder.id` числовой, а guild-id — snowflake-строка →
+  детерминированный индекс-маппинг на сессию.
+- **Рендер текста** (чистый парсер + мапперы в `helpers.ts`/`markdown.ts`,
+  юнит-тесты): Discord-markdown → `MessageEntity` (bold/italic/underline/strike/
+  spoiler/code/pre/quote/**heading→bold**/link/mention/custom-emoji). Discord
+  часто кладёт контент НЕ в `content`: **форварды** (`messageSnapshots`),
+  **embeds** (title/description/fields), **Components V2** (дерево `components`,
+  текст в узлах TextDisplay), **системные** сообщения (join/boost/pin — текст по
+  `type`). Всё это разворачивается в текст.
+- **Медиа** — аттачменты у Discord это CDN-URL, поэтому `getMedia` (превью с
+  ресайзом через media-прокси) и `getMediaFile` (полная загрузка) = обычный
+  `fetch`, без MTProto. URL кэшируется по id сообщения при маппинге (per-session,
+  как rawMessages у WhatsApp).
+- **Realtime** — `messageCreate/Update/Delete[Bulk]`; эхо своих отправок гасится
+  по `sentIds`. **Непрочитанное** — клиентский счётчик (инкремент на входящее,
+  сброс в `markAsRead` при открытии), т.к. `acknowledge`/read-state в либе нет;
+  стартует с нуля каждую сессию.
+
+**Minify-фикс (`keepNames`).** discord.js регистрирует gateway-действия по
+`Class.name`, а production-минификация esbuild переименовывала классы → ключ не
+совпадал с хардкодной строкой хендлера (`client.actions.ThreadListSync`) →
+`undefined.handle`, uncaught exception на `THREAD_LIST_SYNC`. Лечится
+`keepNames: true` в esbuild — сохраняет `Function.name` при минификации. Voice/
+нативные пиры вынесены в `external` (как Baileys, ADR-010).
+
+Отложено (BETA): search, профили, mute, история непрочитанного, poll/reactions.

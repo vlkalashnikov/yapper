@@ -10,6 +10,7 @@ declare -a BADGES=(
   "vscode|https://img.shields.io/badge/VS%20Code-%5E1.91-2AABEE?logo=visualstudiocode&logoColor=white"
   "telegram|https://img.shields.io/badge/Telegram-full-2AABEE?logo=telegram&logoColor=white"
   "whatsapp|https://img.shields.io/badge/WhatsApp-BETA-25D366?logo=whatsapp&logoColor=white"
+  "discord|https://img.shields.io/badge/Discord-BETA-5865F2?logo=discord&logoColor=white"
   "i18n|https://img.shields.io/badge/i18n-EN%20%C2%B7%20RU-blue"
   "license|https://img.shields.io/badge/License-MIT-green"
 )

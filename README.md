@@ -10,6 +10,7 @@
   <img src="docs/media/badges/vscode.png" alt="VS Code ^1.91" height="20" />
   <img src="docs/media/badges/telegram.png" alt="Telegram: full" height="20" />
   <img src="docs/media/badges/whatsapp.png" alt="WhatsApp: BETA" height="20" />
+  <img src="docs/media/badges/discord.png" alt="Discord: BETA" height="20" />
   <img src="docs/media/badges/i18n.png" alt="English and Russian" height="20" />
   <img src="docs/media/badges/license.png" alt="MIT License" height="20" />
 </p>
@@ -21,15 +22,15 @@ Claude-Code-style conversation tab that any messaging backend can plug into. The
 UI never depends on a specific messenger — each provider maps its own data into a
 shared model, and the interface renders it uniformly.
 
-The point isn't to reimplement Telegram or WhatsApp inside your editor. It's to
+The point isn't to reimplement each messenger inside your editor. It's to
 give you the things a normal messenger **can't** do from an editor: drop a
 selection, a file, a `path:line` link, a `git diff` or your last commit straight
 into a chat — and click a `path:line` in a reply to jump right back to the code.
 
 ## ✨ Highlights
 
-- 💬 **Two messengers, one UI** — Telegram (full) and WhatsApp (BETA), switched
-  with a single command. Slack, Discord and Teams are on the roadmap.
+- 💬 **Three messengers, one UI** — Telegram (full), WhatsApp (BETA) and Discord
+  (BETA), switched with a single command. Slack and Teams are on the roadmap.
 - ✂️ **Share from the editor** — code, whole files, `git diff`, the latest commit,
   or a `path:line` reference, sent into the chat you have open.
 - 🔗 **Clickable `path:line`** in messages opens the file at that exact line.
@@ -42,22 +43,23 @@ into a chat — and click a `path:line` in a reply to jump right back to the cod
 
 ## Messenger support at a glance
 
-| Capability | 📨 Telegram | 🟢 WhatsApp |
-| --- | :---: | :---: |
-| QR-code sign-in (+ 2FA) | ✅ | ✅ |
-| Chat list, unread badge & toasts | ✅ | ✅ |
-| Realtime send / receive | ✅ | ✅ |
-| History pagination | ✅ | ✅ |
-| Reply · edit · delete (live) | ✅ | ➖ |
-| Read receipts (✓ / ✓✓) | ✅ | ✅ *(1:1)* |
-| Incoming media (images / video / files) | ✅ | ✅ |
-| In-chat & global search | ✅ | 🚧 |
-| Profile cards & shared media | ✅ | 🚧 |
-| Folders, forum topics & Archive | ✅ | ➖ |
-| Mute (respected in notifications) | ✅ *(toggle)* | ✅ *(read-only)* |
-| Chat avatar in the header | ✅ | ✅ *(best-effort)* |
-| `@`-mention autocomplete | ✅ | ➖ |
-| **Share code / file / diff / commit** | ✅ | ✅ |
+| Capability | 📨 Telegram | 🟢 WhatsApp | 🟣 Discord |
+| --- | :---: | :---: | :---: |
+| QR-code sign-in | ✅ *(+ 2FA)* | ✅ | ✅ |
+| Chat list, unread badge & toasts | ✅ | ✅ | ✅ *(unread per session)* |
+| Realtime send / receive | ✅ | ✅ | ✅ |
+| History pagination | ✅ | ✅ | ✅ |
+| Reply · edit · delete (live) | ✅ | ➖ | ✅ |
+| Read receipts (✓ / ✓✓) | ✅ | ✅ *(1:1)* | ➖ |
+| Incoming media (images / video / files) | ✅ | ✅ | ✅ |
+| Rich text (markdown, mentions, embeds) | ✅ | ✅ | ✅ *(+ Components V2)* |
+| Servers / folders, forum topics | ✅ | ➖ | ✅ *(servers, threads)* |
+| In-chat & global search | ✅ | 🚧 | 🚧 |
+| Profile cards & shared media | ✅ | 🚧 | 🚧 |
+| Mute (respected in notifications) | ✅ *(toggle)* | ✅ *(read-only)* | 🚧 |
+| Chat avatar in the header | ✅ | ✅ *(best-effort)* | ✅ |
+| `@`-mention autocomplete | ✅ | ➖ | 🚧 |
+| **Share code / file / diff / commit** | ✅ | ✅ | ✅ *(best-effort)* |
 
 <sub>✅ available · 🚧 in progress · ➖ not applicable / not yet</sub>
 
@@ -124,6 +126,40 @@ toggle.
 
 ---
 
+## 🟣 Discord — BETA (text-first)
+
+Built on [discord.js-selfbot](https://github.com/youtsuhodev/discord.js-selfbot-youtsuho-v13) —
+you sign in as **your own account** (not a bot), so you see your DMs, group DMs
+and servers, right in the editor.
+
+**Working today**
+
+- QR-code sign-in; silent reconnect on restart.
+- **DMs, group DMs and server channels** — servers appear as folders, forum
+  channels expand into their threads; history with pagination.
+- **Realtime** send / receive, edits and deletes; a per-session unread badge.
+- **Rich text** — Discord markdown (bold/italic/strike/spoiler/code/quotes/
+  headings), mentions, custom emoji, **forwards**, **embeds** and modern
+  **Components V2** bot messages all render.
+- **Incoming media** — image previews, a lightbox, and file downloads.
+- **Editor sharing** — send code, files, diffs and commits, same as Telegram.
+
+**On the way** — search, profile cards, and mute.
+
+**Get started**
+
+1. Run **Yapper: Switch Messenger → Discord**.
+2. Click **Sign in**.
+3. Scan the QR from **Discord (mobile) → Settings → Scan QR Code**.
+
+> ⚠️ Automating a **user account** is against Discord's Terms of Service and can
+> get the account banned — use at your own discretion. Discord also CAPTCHA-gates
+> sending from new devices: if a send is blocked, send one message from the
+> official Discord app first to trust the device, then retry. Sending is
+> best-effort.
+
+---
+
 ## ✂️ Share from the editor
 
 The flagship feature, and **provider-agnostic** — it works with any messenger
@@ -147,7 +183,7 @@ that supports sending. Open a chat, then push code straight into it.
 | --- | --- |
 | Yapper: Sign in | Start QR sign-in for the active messenger |
 | Yapper: Sign out | Disconnect (keeps API credentials) |
-| Yapper: Switch Messenger | Switch the active messenger (Telegram / WhatsApp) |
+| Yapper: Switch Messenger | Switch the active messenger (Telegram / WhatsApp / Discord) |
 | Yapper: Search Chats | Quick-pick over your chats |
 | Yapper: Search All Messages | Global message search |
 | Yapper: Send Code to Chat | Send the selection / whole file as a code block |
@@ -180,6 +216,7 @@ bar (diff / commit), and the Explorer (send file).
   [my.telegram.org](https://my.telegram.org) (entered once, reused from
   SecretStorage).
 - **WhatsApp** — just the WhatsApp mobile app to scan the QR.
+- **Discord** — just the Discord mobile app to scan the QR.
 
 ## Privacy & security
 

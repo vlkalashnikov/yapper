@@ -1109,6 +1109,55 @@ img.avatar.clickable-user:hover,
   color: var(--vscode-foreground);
 }
 
+/* Pasted/dropped image preview shown inside the composer before sending. */
+#image-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 6px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  margin-bottom: 4px;
+}
+
+#image-bar.hidden {
+  display: none;
+}
+
+#image-bar .ib-thumb {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--vscode-panel-border);
+}
+
+#image-bar .ib-info {
+  flex: 1;
+  min-width: 0;
+}
+
+#image-bar .ib-label {
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+}
+
+#image-bar .ib-cancel {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+}
+
+#image-bar .ib-cancel:hover {
+  background: var(--hover-bg);
+  color: var(--vscode-foreground);
+}
+
 #input {
   width: 100%;
   resize: none;

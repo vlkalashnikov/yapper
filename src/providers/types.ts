@@ -268,6 +268,15 @@ export interface MessengerProvider {
     topicId?: string
   ): Promise<Message>;
 
+  /** Send a local image as a photo (inline preview), with an optional caption.
+   *  Used by paste/drag-drop in the composer. */
+  sendImage?(
+    chatId: string,
+    filePath: string,
+    caption?: string,
+    topicId?: string
+  ): Promise<Message>;
+
   /**
    * Return the chat's avatar as a data URL, or undefined if there is none.
    * Optional: providers without avatars simply omit it.

@@ -935,6 +935,31 @@ export class TelegramProvider implements Messenger {
     return msg;
   }
 
+  async sendImage(
+    chatId: string,
+    filePath: string,
+    caption?: string,
+    topicId?: string
+  ): Promise<Message> {
+    if (!this.client) {
+      throw new Error(vscode.l10n.t("Not connected to Telegram"));
+    }
+    const entity = await this.resolveEntity(chatId);
+    if (!entity) {
+      throw new Error(vscode.l10n.t("Chat not found"));
+    }
+    // No forceDocument: Telegram sends it as an inline photo, not a file.
+    const sent = await this.client.sendFile(entity, {
+      file: filePath,
+      ...(caption ? { caption } : {}),
+      ...(topicId ? { replyTo: Number(topicId) } : {}),
+    });
+    this.messageCache.set(`${chatId}:${sent.id}`, sent);
+    const msg = this.toMessage(chatId, sent);
+    msg.reply = this.buildReply(chatId, sent);
+    return msg;
+  }
+
   dispose(): void {
     void this.client?.disconnect().catch(() => undefined);
     this._onMessage.dispose();

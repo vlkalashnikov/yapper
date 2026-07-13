@@ -496,3 +496,46 @@ Selection/Diff/File бросали «not supported»).
 - только **аватар чата** (шапка). Дерево чатов — на `ThemeIcon` (как у
   Telegram). Пер-сообщенческие аватары авторов в группах (`Message.avatar`) —
   позже (нужен async-проход по отправителям при загрузке).
+
+---
+
+# ADR-018
+
+## Отправка изображения из буфера обмена — через paste в вебвью
+
+Кинуть скриншот из буфера прямо в чат. У **extension host** VS Code буфер
+обмена **только текстовый** (`vscode.env.clipboard` = `readText`/`writeText`),
+картинку оттуда не достать без нативного бинарника на каждую ОС
+(`pngpaste`/PowerShell/`xclip`) — хрупко. Поэтому идём через **вебвью**
+(Chromium): он читает картинку из браузерного события `paste`.
+
+Реализация
+
+- **вебвью** (`conversation.js`): слушаем `paste` на `#input` (и `drop` на
+  композере — бесплатный drag-and-drop). Первый item с `image/*` →
+  `getAsFile()` → `FileReader.readAsDataURL` → превью-чип `#image-bar` над
+  вводом (по образцу `#reply-bar`). Текст в поле становится **подписью**;
+  Send шлёт `{ type:"sendImage", dataUrl, mime, caption }`. `updateSendState`
+  разрешает отправку картинки без текста; `Escape`/смена чата — сброс.
+- **хост** (`ConversationPanel.handleSendImage`): декодирует data URL →
+  пишет во временный файл в `storageUri` (`paste_<ts>.<ext>`) → зовёт
+  `provider.sendImage`. **Провайдеро-агностичное превью своего сообщения**:
+  локальный файл засеивается в `mediaCache` (инлайн, через поле `media` в
+  `append`) и в `fileCache` (лайтбокс) — без похода в `getMedia`.
+- **интерфейс**: новый опциональный `sendImage(chatId, filePath, caption?,
+  topicId?)`. Отдаём **фото**, а не документ (иначе теряется инлайн-превью;
+  `sendFile` осознанно шлёт документом для исходников).
+- **Telegram**: тот же `client.sendFile` **без** `forceDocument` → инлайн-фото
+  (`toMessage` проставляет `hasImage`/`mediaKind:"photo"`).
+- **WhatsApp**: `sock.sendMessage(jid, { image, caption })` + `recordOutgoing`;
+  raw кэшируется в `rawMessages` для повторного открытия.
+
+Особенности / границы
+
+- используем именно событие `paste`, не `navigator.clipboard.read()` —
+  последнее в вебвью обычно заблокировано.
+- CSP не трогаем: `img-src` уже разрешает `data:`, локальный файл идёт через
+  `asWebviewUri` (cspSource), сети нет.
+- у WhatsApp сгенерированной миниатюры может не быть (media-пиры `sharp`/`jimp`
+  externalized, см. ADR-016), но своё превью берётся из локального файла, так
+  что показывается всегда; у собеседника фото уходит корректно.

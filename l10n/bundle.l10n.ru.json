@@ -43,6 +43,7 @@
   "sending code is not supported": "отправка кода не поддерживается",
   "sending messages is not supported": "отправка сообщений не поддерживается",
   "sending files is not supported": "отправка файлов не поддерживается",
+  "sending images is not supported": "отправка изображений не поддерживается",
   "Yapper: open a chat to send to first": "Yapper: сначала откройте чат, куда отправить",
   "Yapper: failed to send — {0}": "Yapper: не удалось отправить — {0}",
   "Yapper: failed to send message — {0}": "Yapper: не удалось отправить сообщение — {0}",
@@ -58,6 +59,8 @@
   "Coming soon: commands": "Скоро: команды",
   "Send": "Отправить",
   "Attach a file": "Прикрепить файл",
+  "Image ready to send": "Изображение готово к отправке",
+  "Add a caption…": "Добавьте подпись…",
   "🔒 You can't send messages here": "🔒 Здесь нельзя отправлять сообщения",
 
   "Loading messages…": "Загрузка сообщений…",

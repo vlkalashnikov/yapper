@@ -17,6 +17,8 @@
   const sendBtn = document.getElementById("send");
   const mentionPopup = document.getElementById("mention-popup");
   const replyBar = document.getElementById("reply-bar");
+  const imageBar = document.getElementById("image-bar");
+  const defaultPlaceholder = input.getAttribute("placeholder") || "";
   const scrollDownBtn = document.getElementById("scroll-down");
   const olderLoader = document.getElementById("older-loader");
 
@@ -70,6 +72,8 @@
   let suppressScrollLoad = false;
   // The message currently being replied to, or null.
   let replyingTo = null;
+  // A pasted/dropped image awaiting send: { dataUrl, mime }. Null when none.
+  let pendingImage = null;
   // messageId -> image container awaiting its thumbnail.
   const pendingImages = new Map();
   // messageId -> data URL (string) or null (failed). Survives re-renders.
@@ -677,6 +681,61 @@
     replyBar.replaceChildren();
   }
 
+  // Show a pasted/dropped image as a chip above the input; the textarea becomes
+  // the (optional) caption, and Send fires it off.
+  function showImagePreview(dataUrl, mime) {
+    pendingImage = { dataUrl: dataUrl, mime: mime };
+    imageBar.replaceChildren();
+    const thumb = document.createElement("img");
+    thumb.className = "ib-thumb";
+    thumb.src = dataUrl;
+    thumb.alt = "";
+    const info = document.createElement("div");
+    info.className = "ib-info";
+    const label = document.createElement("div");
+    label.className = "ib-label";
+    label.textContent = L.imageAttached;
+    info.append(label);
+    const cancel = document.createElement("button");
+    cancel.className = "ib-cancel";
+    cancel.title = L.cancel;
+    cancel.textContent = "✕";
+    cancel.addEventListener("click", cancelImage);
+    imageBar.append(thumb, info, cancel);
+    imageBar.classList.remove("hidden");
+    input.setAttribute("placeholder", L.captionPlaceholder);
+    input.focus();
+    updateSendState();
+  }
+
+  function cancelImage() {
+    pendingImage = null;
+    imageBar.classList.add("hidden");
+    imageBar.replaceChildren();
+    input.setAttribute("placeholder", defaultPlaceholder);
+    updateSendState();
+  }
+
+  // Pull the first image out of a clipboard/drop item list into the preview.
+  function imageFromItems(items) {
+    const list = items ? Array.prototype.slice.call(items) : [];
+    for (const it of list) {
+      const isImage = it.type
+        ? it.type.startsWith("image/")
+        : /^image\//.test(it.type || "");
+      if (isImage) {
+        const file = it.getAsFile ? it.getAsFile() : it;
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = () => showImagePreview(reader.result, file.type);
+          reader.readAsDataURL(file);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   function guardScroll() {
     suppressScrollLoad = true;
     setTimeout(() => {
@@ -906,6 +965,7 @@
     mediaCache.clear();
     hideMentionPopup();
     cancelReply();
+    cancelImage();
     closeProfile(); // opening a chat (e.g. via a t.me link) closes overlays
     closeLightbox();
     setHeader(chat);
@@ -1237,7 +1297,9 @@
   });
 
   function updateSendState() {
-    sendBtn.disabled = input.value.trim().length === 0 || !currentChatId;
+    // A pending image is sendable on its own (caption optional).
+    const empty = input.value.trim().length === 0 && !pendingImage;
+    sendBtn.disabled = empty || !currentChatId;
   }
 
   // Hide the composer and show a read-only note when the user can't post here.
@@ -1250,7 +1312,25 @@
 
   function send() {
     const text = input.value.trim();
-    if (!text || !currentChatId) {
+    if (!currentChatId) {
+      return;
+    }
+    if (pendingImage) {
+      vscode.postMessage({
+        type: "sendImage",
+        chatId: currentChatId,
+        dataUrl: pendingImage.dataUrl,
+        mime: pendingImage.mime,
+        caption: text || undefined,
+      });
+      input.value = "";
+      input.style.height = "auto";
+      cancelImage();
+      cancelReply();
+      updateSendState();
+      return;
+    }
+    if (!text) {
       return;
     }
     vscode.postMessage({
@@ -1392,6 +1472,11 @@
         return;
       }
     }
+    if (e.key === "Escape" && pendingImage) {
+      e.preventDefault();
+      cancelImage();
+      return;
+    }
     if (e.key === "Escape" && replyingTo) {
       e.preventDefault();
       cancelReply();
@@ -1410,6 +1495,33 @@
   });
 
   sendBtn.addEventListener("click", send);
+
+  // Paste an image from the clipboard into the composer (Cmd/Ctrl+V).
+  input.addEventListener("paste", (e) => {
+    if (!currentChatId || !e.clipboardData) {
+      return;
+    }
+    if (imageFromItems(e.clipboardData.items)) {
+      e.preventDefault(); // it's an image — don't also paste its text/path
+    }
+  });
+
+  // Drag & drop an image file onto the composer.
+  const composerBox = document.querySelector(".composer-box");
+  if (composerBox) {
+    composerBox.addEventListener("dragover", (e) => e.preventDefault());
+    composerBox.addEventListener("drop", (e) => {
+      if (!currentChatId || !e.dataTransfer) {
+        return;
+      }
+      const files = e.dataTransfer.files;
+      const items =
+        files && files.length ? files : e.dataTransfer.items;
+      if (imageFromItems(items)) {
+        e.preventDefault();
+      }
+    });
+  }
 
   document.getElementById("attach").addEventListener("click", () => {
     if (currentChatId) {
@@ -1576,6 +1688,11 @@
           break;
         }
         allMessages.push(msg.message);
+        // A just-sent image ships its local preview URL — seed the cache so it
+        // renders immediately without a round-trip to the provider.
+        if (msg.media && msg.message.hasImage) {
+          mediaCache.set(msg.message.id, msg.media);
+        }
         const near = isNearBottom();
         appendMessage(msg.message);
         if (near || msg.message.outgoing) {

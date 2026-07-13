@@ -299,6 +299,8 @@ export class ConversationPanel {
         this.searchInChat();
       } else if (msg.type === "composerMenu") {
         await this.attachFile();
+      } else if (msg.type === "sendImage") {
+        await this.handleSendImage(msg.dataUrl, msg.mime, msg.caption);
       } else if (msg.type === "openProfile") {
         await this.handleProfile(msg.chatId);
       } else if (msg.type === "setMuted") {
@@ -488,6 +490,54 @@ export class ConversationPanel {
     }
   }
 
+  /** Send an image pasted (or dropped) into the composer. The webview hands us a
+   *  data URL; we write it to a temp file, send it as a photo, and seed the
+   *  media/file caches with the local file so it previews and opens instantly. */
+  private async handleSendImage(
+    dataUrl: string,
+    mime: string,
+    caption?: string
+  ): Promise<void> {
+    const chat = this.currentChat;
+    if (!chat) {
+      void vscode.window.showWarningMessage(
+        vscode.l10n.t("Yapper: open a chat to send to first")
+      );
+      return;
+    }
+    if (!this.provider.sendImage) {
+      void vscode.window.showErrorMessage(
+        vscode.l10n.t("sending images is not supported")
+      );
+      return;
+    }
+    try {
+      const bytes = Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64");
+      const uri = vscode.Uri.joinPath(
+        this.storageUri,
+        `paste_${Date.now()}.${extFromMime(mime)}`
+      );
+      await vscode.workspace.fs.createDirectory(this.storageUri);
+      await vscode.workspace.fs.writeFile(uri, bytes);
+      const message = await this.provider.sendImage(
+        chat.id,
+        uri.fsPath,
+        caption,
+        chat.topicId
+      );
+      // Reuse the local file for preview (media cache) and the lightbox (file
+      // cache), so the just-sent photo shows without re-downloading it.
+      this.fileCache.set(`${chat.id}:${message.id}`, { uri, kind: "image" });
+      const media = this.panel?.webview.asWebviewUri(uri).toString();
+      this.panel?.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Active, false);
+      void this.panel?.webview.postMessage({ type: "append", message, media });
+    } catch (err) {
+      void vscode.window.showErrorMessage(
+        vscode.l10n.t("Yapper: failed to send — {0}", (err as Error).message)
+      );
+    }
+  }
+
   /** Open a workspace file referenced from a chat (path:line) at that line. */
   private async openWorkspaceFile(
     file: string,
@@ -647,6 +697,8 @@ export class ConversationPanel {
       reply: vscode.l10n.t("Reply"),
       replyPrefix: vscode.l10n.t("Reply:"),
       cancel: vscode.l10n.t("Cancel"),
+      imageAttached: vscode.l10n.t("Image ready to send"),
+      captionPlaceholder: vscode.l10n.t("Add a caption…"),
       edited: vscode.l10n.t("edited"),
       goToMessage: vscode.l10n.t("Go to message"),
       message: vscode.l10n.t("Message"),
@@ -699,6 +751,7 @@ export class ConversationPanel {
     <div id="mention-popup" class="hidden"></div>
     <div class="composer-box">
       <div id="reply-bar" class="hidden"></div>
+      <div id="image-bar" class="hidden"></div>
       <textarea id="input" rows="1" placeholder="${vscode.l10n.t("Message...")}"></textarea>
       <div class="composer-toolbar">
         <div class="left">
@@ -761,6 +814,18 @@ async function resolveWorkspaceFile(file: string): Promise<vscode.Uri | undefine
     1
   );
   return found[0];
+}
+
+/** File extension for a pasted image's MIME type (defaults to png). */
+function extFromMime(mime: string): string {
+  const map: Record<string, string> = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "image/bmp": "bmp",
+  };
+  return map[mime] ?? "png";
 }
 
 function getNonce(): string {

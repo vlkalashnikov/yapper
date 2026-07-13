@@ -342,6 +342,33 @@ export class WhatsAppProvider implements Messenger {
     });
   }
 
+  async sendImage(
+    chatId: string,
+    filePath: string,
+    caption?: string
+  ): Promise<Message> {
+    if (!this.sock) {
+      throw new Error(vscode.l10n.t("Not connected to WhatsApp"));
+    }
+    const data = fs.readFileSync(filePath);
+    const sent = await this.sock.sendMessage(chatId, {
+      image: data,
+      ...(caption ? { caption } : {}),
+    });
+    if (!sent) {
+      throw new Error(vscode.l10n.t("Failed to send"));
+    }
+    // Keep the raw message so the sent photo can be re-opened full-size later.
+    if (sent.key.id) {
+      this.rawMessages.set(sent.key.id, sent);
+    }
+    return this.recordOutgoing(chatId, sent, {
+      text: caption ?? "",
+      hasImage: true,
+      mediaKind: "photo",
+    });
+  }
+
   /** Record a message we built ourselves (code block / document) into the store,
    *  suppress its realtime echo, and return it for the UI to append. */
   private recordOutgoing(

@@ -38,6 +38,10 @@ const options = {
   ],
   sourcemap: !production,
   minify: production,
+  // discord.js registers gateway actions by `Class.name` (e.g. ThreadListSync),
+  // so minifying class names breaks the dispatch (crashes on THREAD_LIST_SYNC).
+  // keepNames preserves runtime .name through minification.
+  keepNames: true,
   logLevel: "info",
 };
 

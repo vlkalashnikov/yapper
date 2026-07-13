@@ -93,6 +93,12 @@ export class DiscordProvider implements Messenger {
   private readonly guildIds = new Map<string, number>();
   /** Avatar data-URL cache by chat id (includes misses, so they aren't refetched). */
   private readonly avatars = new Map<string, string | undefined>();
+  /** Ids of messages we sent ourselves, to swallow their realtime echo (Phase 5). */
+  private readonly sentIds = new Set<string>();
+  /** Live unread count per chat — incremented on incoming, cleared on open.
+   *  Client-side only (Discord's read state isn't synced back); starts empty
+   *  each session, so it tracks messages seen while running, not historical. */
+  private readonly unreadCounts = new Map<string, number>();
 
   private readonly _onMessage = new vscode.EventEmitter<Message>();
   readonly onMessage = this._onMessage.event;
@@ -169,6 +175,8 @@ export class DiscordProvider implements Messenger {
     this.open = false;
     this.avatars.clear();
     this.guildIds.clear();
+    this.sentIds.clear();
+    this.unreadCounts.clear();
     await this.storage.clearToken();
     this._onConnectionChange.fire(false);
   }
@@ -216,7 +224,74 @@ export class DiscordProvider implements Messenger {
     client.on("shardError", (err) =>
       console.warn("[Yapper/Discord] shard error:", (err as Error)?.message)
     );
-    // Realtime message events (messageCreate/Update/Delete) land in Phase 4.
+
+    // --- Realtime ---
+    client.on("messageCreate", (m) => {
+      if (this.client !== client) {
+        return;
+      }
+      const raw = m as unknown as { id?: string };
+      if (raw.id && this.sentIds.has(raw.id)) {
+        this.sentIds.delete(raw.id); // our own send — already shown optimistically
+        return;
+      }
+      const msg = this.mapRealtime(m);
+      if (msg) {
+        if (!msg.outgoing) {
+          // Bump unread; if the user is viewing this chat, markAsRead clears it.
+          this.unreadCounts.set(msg.chatId, (this.unreadCounts.get(msg.chatId) ?? 0) + 1);
+        }
+        this._onMessage.fire(msg);
+      }
+    });
+    client.on("messageUpdate", (_old, m) => {
+      if (this.client !== client || !m) {
+        return;
+      }
+      const msg = this.mapRealtime(m);
+      if (msg) {
+        this._onMessageEdited.fire(msg);
+      }
+    });
+    client.on("messageDelete", (m) => {
+      if (this.client !== client) {
+        return;
+      }
+      const d = m as unknown as { id?: string; channelId?: string };
+      if (d.id) {
+        this._onMessagesDeleted.fire({ chatId: d.channelId, ids: [d.id] });
+      }
+    });
+    client.on("messageDeleteBulk", (coll) => {
+      if (this.client !== client) {
+        return;
+      }
+      const c = coll as unknown as {
+        values(): Iterable<{ id?: string; channelId?: string }>;
+      };
+      const arr = [...c.values()];
+      const ids = arr.map((x) => x.id).filter((v): v is string => !!v);
+      if (ids.length) {
+        this._onMessagesDeleted.fire({ chatId: arr[0]?.channelId, ids });
+      }
+    });
+  }
+
+  /** Map a realtime message, resolving thread messages to (parent, topic). */
+  private mapRealtime(m: unknown): Message | undefined {
+    try {
+      const msg = toMessage(m as unknown as DiscordMessageLike, this.client?.user?.id);
+      const raw = m as unknown as {
+        channel?: { isThread?(): boolean; parentId?: string | null };
+      };
+      if (raw.channel?.isThread?.() && raw.channel.parentId) {
+        msg.topicId = msg.chatId;
+        msg.chatId = raw.channel.parentId;
+      }
+      return msg;
+    } catch {
+      return undefined;
+    }
   }
 
   // --- Data ---
@@ -331,6 +406,12 @@ export class DiscordProvider implements Messenger {
     return data;
   }
 
+  /** Clear a chat's unread (opening/viewing it). Client-side only — Discord has
+   *  no `acknowledge` in this library, so read state isn't synced back. */
+  async markAsRead(chatId: string): Promise<void> {
+    this.unreadCounts.delete(chatId);
+  }
+
   isChatMuted(): boolean {
     return false;
   }
@@ -344,7 +425,7 @@ export class DiscordProvider implements Messenger {
         : ch.recipient
         ? ch.recipient.globalName || ch.recipient.username
         : ch.id;
-    return { id: ch.id, title };
+    return { id: ch.id, title, unreadCount: this.unreadCounts.get(ch.id) };
   }
 
   private guildChat(ch: ChannelLike): Chat {
@@ -352,6 +433,7 @@ export class DiscordProvider implements Messenger {
       id: ch.id,
       title: ch.name || ch.id,
       isForum: ch.type === "GUILD_FORUM" || undefined,
+      unreadCount: this.unreadCounts.get(ch.id),
     };
   }
 

@@ -3,6 +3,8 @@ import * as path from "path";
 import { TelegramProvider } from "./providers/telegram/TelegramProvider";
 import { TelegramStorage } from "./providers/telegram/storage";
 import { WhatsAppProvider } from "./providers/whatsapp/WhatsAppProvider";
+import { DiscordProvider } from "./providers/discord/DiscordProvider";
+import { DiscordStorage } from "./providers/discord/storage";
 import { ChatTreeProvider } from "./ui/ChatTreeProvider";
 import { ConversationPanel } from "./ui/ConversationPanel";
 import { Chat, GlobalHit, Message, Messenger } from "./providers/types";
@@ -16,8 +18,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const whatsapp = new WhatsAppProvider(
     vscode.Uri.joinPath(context.globalStorageUri, "whatsapp-auth").fsPath
   );
+  const discord = new DiscordProvider(new DiscordStorage(context.secrets));
   // The registry of available messengers.
-  const providers: Messenger[] = [telegram, whatsapp];
+  const providers: Messenger[] = [telegram, whatsapp, discord];
 
   // Restore the last active provider (default: the first available).
   const savedId = context.globalState.get<string>(ACTIVE_PROVIDER_KEY);

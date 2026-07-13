@@ -1,0 +1,443 @@
+import * as vscode from "vscode";
+import type { Client } from "discord.js-selfbot-youtsuho-v13";
+import type { Chat, Folder, Message, Messenger, Topic } from "../types";
+import { DiscordStorage } from "./storage";
+import { toMessage, guildFolderId, DiscordMessageLike } from "./helpers";
+import { QrLoginPanel, QrLoginText } from "../../ui/QrLoginPanel";
+
+/** Guild channel types we surface as chats (text-ish); voice/categories skipped. */
+const SUPPORTED_GUILD_TYPES = new Set(["GUILD_TEXT", "GUILD_NEWS", "GUILD_FORUM"]);
+
+/** A text-ish guild channel the current user can actually view. */
+function isVisibleGuildChannel(ch: { type: string; viewable?: boolean }): boolean {
+  return SUPPORTED_GUILD_TYPES.has(ch.type) && ch.viewable !== false;
+}
+
+/* Narrow structural views of the discord.js channel/guild objects, so the
+ * provider reads them without wrestling the library's channel-union types.
+ * Real objects are cast in via `as unknown as …`. */
+interface MessagesLike {
+  fetch(query?: {
+    limit?: number;
+    before?: string;
+    after?: string;
+    around?: string;
+  }): Promise<{ values(): Iterable<unknown> }>;
+}
+interface ThreadLike {
+  id: string;
+  name: string;
+  archived?: boolean;
+  locked?: boolean;
+}
+interface ChannelLike {
+  id: string;
+  type: string;
+  name?: string | null;
+  /** Guild channels: whether the current user can view it (false → skip/hide). */
+  viewable?: boolean;
+  recipient?: { globalName?: string | null; username: string; displayAvatarURL(): string };
+  guild?: { iconURL(): string | null };
+  messages?: MessagesLike;
+  threads?: { fetchActive(): Promise<{ threads: { values(): Iterable<ThreadLike> } }> };
+}
+interface GuildLike {
+  id: string;
+  name: string;
+  channels: { cache: { values(): Iterable<ChannelLike> } };
+}
+
+type DiscordLib = typeof import("discord.js-selfbot-youtsuho-v13");
+let cachedLib: DiscordLib | undefined;
+
+/** Lazy-load the library, swallowing the ASCII banner it unconditionally prints
+ *  to the console on first require (there's no option to disable it). Lazy so an
+ *  account that never uses Discord doesn't pay the load. */
+function loadDiscord(): DiscordLib {
+  if (!cachedLib) {
+    const log = console.log;
+    console.log = () => undefined;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- lazy load to suppress the banner and defer the heavy import
+      cachedLib = require("discord.js-selfbot-youtsuho-v13") as DiscordLib;
+    } finally {
+      console.log = log;
+    }
+  }
+  return cachedLib;
+}
+
+/**
+ * Discord provider — a user-account ("self-bot") client over
+ * discord.js-selfbot-youtsuho-v13, signed in by QR remote-auth. Mirrors the
+ * WhatsAppProvider shape (event-driven, BETA, own caches).
+ *
+ * Phase 2 (this file): auth lifecycle — QR sign-in, token in SecretStorage,
+ * reconnect on startup. Reading (Phase 3), realtime (Phase 4), sending (Phase 5)
+ * and media (Phase 6) are stubs, filled in next.
+ *
+ * ⚠️ Automating a user account is against Discord's Terms of Service and can get
+ * the account banned — accepted consciously (like WhatsApp/Baileys), hence BETA.
+ */
+export class DiscordProvider implements Messenger {
+  readonly id = "discord";
+  readonly name = "Discord";
+  readonly beta = true;
+  readonly historyPageSize = 50;
+  readonly maxMessageLength = 2000;
+
+  private client?: Client;
+  private open = false;
+
+  /** Stable numeric folder ids per guild snowflake (see guildFolderId). */
+  private readonly guildIds = new Map<string, number>();
+  /** Avatar data-URL cache by chat id (includes misses, so they aren't refetched). */
+  private readonly avatars = new Map<string, string | undefined>();
+
+  private readonly _onMessage = new vscode.EventEmitter<Message>();
+  readonly onMessage = this._onMessage.event;
+  private readonly _onMessageEdited = new vscode.EventEmitter<Message>();
+  readonly onMessageEdited = this._onMessageEdited.event;
+  private readonly _onMessagesDeleted = new vscode.EventEmitter<{
+    chatId?: string;
+    ids: string[];
+  }>();
+  readonly onMessagesDeleted = this._onMessagesDeleted.event;
+  private readonly _onConnectionChange = new vscode.EventEmitter<boolean>();
+  readonly onConnectionChange = this._onConnectionChange.event;
+
+  constructor(private readonly storage: DiscordStorage) {}
+
+  get connected(): boolean {
+    return this.open;
+  }
+
+  // --- Lifecycle ---
+
+  /** Reconnect a saved token on startup (silent no-op if not signed in). */
+  async init(): Promise<void> {
+    const token = await this.storage.getToken();
+    if (!token) {
+      return;
+    }
+    const client = this.buildClient();
+    try {
+      await client.login(token);
+    } catch {
+      // Token expired or revoked — forget it and stay signed out.
+      client.destroy();
+      this.client = undefined;
+      await this.storage.clearToken();
+    }
+  }
+
+  /** Interactive QR sign-in: render Discord's remote-auth QR, and on success
+   *  persist the token and log the client in. */
+  async login(): Promise<void> {
+    if (this.open) {
+      return;
+    }
+    const { DiscordAuthWebsocket } = loadDiscord();
+    const qr = new QrLoginPanel(discordQrText());
+    const client = this.buildClient();
+    const auth = new DiscordAuthWebsocket();
+    let token = "";
+    auth.on("ready", () => void qr.render(auth.AuthURL));
+    auth.on("finish", (t: string) => {
+      token = t;
+    });
+    try {
+      // connect(client) resolves after the QR is approved and the client logs
+      // in; qr.onCancel rejects (AuthCancelled) if the user closes the panel.
+      await Promise.race([auth.connect(client), qr.onCancel]);
+    } catch (err) {
+      auth.destroy();
+      client.destroy();
+      this.client = undefined;
+      throw err;
+    } finally {
+      qr.close();
+    }
+    if (token) {
+      await this.storage.setToken(token);
+    }
+  }
+
+  async logout(): Promise<void> {
+    this.client?.destroy();
+    this.client = undefined;
+    this.open = false;
+    this.avatars.clear();
+    this.guildIds.clear();
+    await this.storage.clearToken();
+    this._onConnectionChange.fire(false);
+  }
+
+  dispose(): void {
+    this.client?.destroy();
+    this._onMessage.dispose();
+    this._onMessageEdited.dispose();
+    this._onMessagesDeleted.dispose();
+    this._onConnectionChange.dispose();
+  }
+
+  /** Create a client and wire its lifecycle events. */
+  private buildClient(): Client {
+    const { Client } = loadDiscord();
+    const client = new Client();
+    this.client = client;
+    this.bindEvents(client);
+    return client;
+  }
+
+  private bindEvents(client: Client): void {
+    client.on("ready", () => {
+      if (this.client !== client) {
+        return; // a newer client superseded this one
+      }
+      this.open = true;
+      this._onConnectionChange.fire(true);
+    });
+    // Token revoked (e.g. password change / logged out elsewhere).
+    client.on("invalidated", () => {
+      if (this.client !== client) {
+        return;
+      }
+      this.open = false;
+      this.client = undefined;
+      void this.storage.clearToken();
+      this._onConnectionChange.fire(false);
+    });
+    // Swallow gateway/shard errors so an unhandled EventEmitter "error" can't
+    // take down the extension host (this is an unofficial, best-effort library).
+    client.on("error", (err) =>
+      console.warn("[Yapper/Discord] client error:", (err as Error)?.message)
+    );
+    client.on("shardError", (err) =>
+      console.warn("[Yapper/Discord] shard error:", (err as Error)?.message)
+    );
+    // Realtime message events (messageCreate/Update/Delete) land in Phase 4.
+  }
+
+  // --- Data ---
+
+  async getChats(): Promise<Chat[]> {
+    const client = this.client;
+    if (!client) {
+      return [];
+    }
+    const chats: Chat[] = [];
+    const channels = client.channels.cache as unknown as {
+      values(): Iterable<ChannelLike>;
+    };
+    for (const ch of channels.values()) {
+      if (ch.type === "DM" || ch.type === "GROUP_DM") {
+        chats.push(this.dmChat(ch));
+      }
+    }
+    const guilds = client.guilds.cache as unknown as {
+      values(): Iterable<GuildLike>;
+    };
+    for (const g of guilds.values()) {
+      for (const ch of g.channels.cache.values()) {
+        if (isVisibleGuildChannel(ch)) {
+          chats.push(this.guildChat(ch));
+        }
+      }
+    }
+    return chats;
+  }
+
+  /** One folder per guild, holding that guild's (loaded) channels. DMs stay
+   *  ungrouped — the tree surfaces them under its synthesized "All chats". */
+  async getFolders(chats: Chat[]): Promise<Folder[]> {
+    const client = this.client;
+    if (!client) {
+      return [];
+    }
+    const known = new Set(chats.map((c) => c.id));
+    const guilds = client.guilds.cache as unknown as {
+      values(): Iterable<GuildLike>;
+    };
+    const folders: Folder[] = [];
+    for (const g of guilds.values()) {
+      const chatIds: string[] = [];
+      for (const ch of g.channels.cache.values()) {
+        if (isVisibleGuildChannel(ch) && known.has(ch.id)) {
+          chatIds.push(ch.id);
+        }
+      }
+      if (chatIds.length) {
+        folders.push({ id: guildFolderId(g.id, this.guildIds), title: g.name, chatIds });
+      }
+    }
+    return folders;
+  }
+
+  async getTopics(chatId: string): Promise<Topic[]> {
+    const ch = await this.resolveChannel(chatId);
+    if (!ch?.threads) {
+      return [];
+    }
+    const active = await ch.threads.fetchActive().catch(() => undefined);
+    if (!active) {
+      return [];
+    }
+    return [...active.threads.values()].map((t) => ({
+      id: t.id,
+      title: t.name,
+      closed: t.locked || t.archived || undefined,
+    }));
+  }
+
+  async getMessages(chatId: string, topicId?: string): Promise<Message[]> {
+    return this.fetchPage(chatId, topicId, {});
+  }
+
+  async getMessagesBefore(
+    chatId: string,
+    beforeMessageId: string,
+    topicId?: string
+  ): Promise<Message[]> {
+    return this.fetchPage(chatId, topicId, { before: beforeMessageId });
+  }
+
+  async getMessagesAfter(
+    chatId: string,
+    afterMessageId: string,
+    topicId?: string
+  ): Promise<Message[]> {
+    return this.fetchPage(chatId, topicId, { after: afterMessageId });
+  }
+
+  async getMessagesAround(
+    chatId: string,
+    messageId: string,
+    topicId?: string
+  ): Promise<Message[]> {
+    return this.fetchPage(chatId, topicId, { around: messageId });
+  }
+
+  async getAvatar(chatId: string): Promise<string | undefined> {
+    if (this.avatars.has(chatId)) {
+      return this.avatars.get(chatId);
+    }
+    const ch = await this.resolveChannel(chatId);
+    const url = ch?.recipient
+      ? ch.recipient.displayAvatarURL()
+      : ch?.guild?.iconURL() ?? undefined;
+    const data = url ? await fetchAsDataUrl(url) : undefined;
+    this.avatars.set(chatId, data);
+    return data;
+  }
+
+  isChatMuted(): boolean {
+    return false;
+  }
+
+  // --- internals ---
+
+  private dmChat(ch: ChannelLike): Chat {
+    const title =
+      ch.type === "GROUP_DM"
+        ? ch.name || vscode.l10n.t("Group chat")
+        : ch.recipient
+        ? ch.recipient.globalName || ch.recipient.username
+        : ch.id;
+    return { id: ch.id, title };
+  }
+
+  private guildChat(ch: ChannelLike): Chat {
+    return {
+      id: ch.id,
+      title: ch.name || ch.id,
+      isForum: ch.type === "GUILD_FORUM" || undefined,
+    };
+  }
+
+  private async fetchPage(
+    chatId: string,
+    topicId: string | undefined,
+    query: { before?: string; after?: string; around?: string }
+  ): Promise<Message[]> {
+    const target = await this.resolveChannel(topicId ?? chatId);
+    if (!target?.messages) {
+      return [];
+    }
+    let coll: { values(): Iterable<unknown> } | undefined;
+    try {
+      coll = await target.messages.fetch({ limit: this.historyPageSize, ...query });
+    } catch {
+      // e.g. Missing Access (50001) on a channel we can't read — show it empty.
+      return [];
+    }
+    if (!coll) {
+      return [];
+    }
+    const me = this.client?.user?.id;
+    const raws = [...coll.values()];
+    const msgs: Message[] = [];
+    for (const raw of raws) {
+      try {
+        const msg = toMessage(raw as unknown as DiscordMessageLike, me);
+        if (topicId) {
+          // In a thread, discord's channelId is the thread id — keep the parent
+          // as the chat and the thread as the topic.
+          msg.chatId = chatId;
+          msg.topicId = topicId;
+        }
+        msgs.push(msg);
+      } catch {
+        // One malformed message shouldn't drop the whole page.
+      }
+    }
+    // Discord returns newest-first; the UI wants oldest-first.
+    msgs.sort((a, b) => a.timestamp - b.timestamp);
+    return msgs;
+  }
+
+  private async resolveChannel(id: string): Promise<ChannelLike | undefined> {
+    const client = this.client;
+    if (!client) {
+      return undefined;
+    }
+    const cached = client.channels.cache.get(id);
+    if (cached) {
+      return cached as unknown as ChannelLike;
+    }
+    const fetched = await client.channels.fetch(id).catch(() => null);
+    return (fetched ?? undefined) as unknown as ChannelLike | undefined;
+  }
+}
+
+/** Fetch a URL and return it as a base64 data URL (for avatars/media), or
+ *  undefined on failure. */
+async function fetchAsDataUrl(url: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      return undefined;
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    const mime = res.headers.get("content-type") ?? "image/png";
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Localized copy for the QR sign-in panel. */
+function discordQrText(): QrLoginText {
+  return {
+    title: vscode.l10n.t("Sign in to Discord"),
+    heading: vscode.l10n.t("Sign in to Discord with a QR code"),
+    steps: [
+      vscode.l10n.t("Open Discord on your phone"),
+      vscode.l10n.t("Settings → <b>Scan QR Code</b>"),
+      vscode.l10n.t("Point the camera at this QR code"),
+    ],
+    hint: vscode.l10n.t(
+      "The code refreshes automatically. Keep this window open until you sign in."
+    ),
+  };
+}

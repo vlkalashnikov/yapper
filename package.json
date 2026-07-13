@@ -276,6 +276,7 @@
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "discord.js-selfbot-youtsuho-v13": "^3.7.7",
     "qrcode": "^1.5.4",
     "telegram": "^2.26.22"
   }

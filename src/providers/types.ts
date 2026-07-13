@@ -178,6 +178,11 @@ export interface MessengerProvider {
    *  detect end-of-history: a short page means there are no more messages. */
   readonly historyPageSize?: number;
 
+  /** Max length of a single text message for this backend (Telegram 4096,
+   *  Discord 2000). Used to cap/split shared code and diffs. Undefined = no
+   *  practical limit. */
+  readonly maxMessageLength?: number;
+
   getChats(): Promise<Chat[]>;
   getMessages(chatId: string, topicId?: string): Promise<Message[]>;
 

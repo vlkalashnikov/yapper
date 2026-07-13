@@ -11,16 +11,30 @@ const options = {
   platform: "node",
   target: "node20",
   outfile: "dist/extension.js",
-  // vscode is provided by the runtime, never bundle it. The rest are Baileys'
-  // optional media/thumbnail peers — unused in the text-only WhatsApp provider,
-  // so they are left external (never required at runtime) to keep the bundle lean.
+  // vscode is provided by the runtime, never bundle it. The rest are optional
+  // native/media peers of Baileys (WhatsApp) and discord.js-selfbot (Discord) —
+  // voice/thumbnail features we don't use in the text-first providers. Left
+  // external (never required at runtime) to keep the bundle lean and avoid
+  // bundling native .node bindings.
   external: [
     "vscode",
+    // Baileys optional peers
     "sharp",
     "jimp",
     "link-preview-js",
     "qrcode-terminal",
     "audio-decode",
+    // discord.js-selfbot voice/native peers (unused — text-first)
+    "ffmpeg-static",
+    "@snazzah/davey",
+    "@discordjs/opus",
+    "opusscript",
+    "node-opus",
+    "sodium-native",
+    "sodium",
+    "libsodium-wrappers",
+    "tweetnacl",
+    "zlib-sync",
   ],
   sourcemap: !production,
   minify: production,

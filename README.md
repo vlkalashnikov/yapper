@@ -58,7 +58,7 @@ into a chat — and click a `path:line` in a reply to jump right back to the cod
 | Profile cards & shared media | ✅ | 🚧 | ✅ |
 | Mute (respected in notifications) | ✅ *(toggle)* | ✅ *(read-only)* | ✅ *(read-only, servers)* |
 | Chat avatar in the header | ✅ | ✅ *(best-effort)* | ✅ |
-| `@`-mention autocomplete | ✅ | ➖ | 🚧 |
+| `@`-mention autocomplete | ✅ | ➖ | ✅ *(names only)* |
 | **Share code / file / diff / commit** | ✅ | ✅ | ✅ *(best-effort)* |
 
 <sub>✅ available · 🚧 in progress · ➖ not applicable / not yet</sub>
@@ -149,6 +149,9 @@ and servers, right in the editor.
   searches messages in the open channel / thread and jumps to a hit.
 - **Shared media** — the profile card's **Media** and **Files** tabs list a
   chat's photos/videos and documents.
+- **`@`-mention autocomplete** — typing `@` in a server channel suggests
+  members (group DMs suggest recipients); it inserts the handle as text (a
+  functional ping would need `<@id>`, which isn't wired up yet).
 
 **On the way** — global (all-chats) search, and a mute toggle (DM mutes aren't
 exposed by the library yet).

@@ -4,6 +4,7 @@ import type {
   Chat,
   Folder,
   MediaFile,
+  Member,
   Message,
   Messenger,
   Profile,
@@ -108,6 +109,34 @@ interface ProfileChannelLike {
     iconURL?(o?: { size?: number }): string | null;
   };
 }
+/** A user as read for @-mention autocomplete (guild member or DM recipient). */
+interface MentionUserLike {
+  id: string;
+  username: string;
+  globalName?: string | null;
+}
+/** A guild member returned by member search. `displayName` folds in the nickname. */
+interface GuildMemberLike {
+  user: MentionUserLike;
+  displayName?: string;
+}
+/** The channel views needed for @-mention autocomplete: a guild's member search,
+ *  or a group DM's recipient list. */
+interface MentionChannelLike {
+  guild?: {
+    members?: {
+      /** Gateway member fetch (REQUEST_GUILD_MEMBERS). A query + limit returns a
+       *  Collection; used instead of the bot-only REST `search` endpoint, which
+       *  a user account can't call (Missing Access). */
+      fetch(o: {
+        query: string;
+        limit?: number;
+      }): Promise<{ values(): Iterable<GuildMemberLike> }>;
+    };
+  };
+  recipients?: { values(): Iterable<MentionUserLike> };
+}
+
 /** A message's author/member, for resolving the per-message avatar. */
 interface RawAuthorLike {
   author?: { id?: string; displayAvatarURL?(o?: { size?: number }): string };
@@ -691,6 +720,57 @@ export class DiscordProvider implements Messenger {
       bio: u.bio || undefined,
       avatar: await toDataUrl(u.displayAvatarURL?.({ size: 256 })),
     };
+  }
+
+  /** Members offered for @-mention autocomplete: server member search for guild
+   *  channels/threads, the recipient list for a group DM (filtered locally),
+   *  nothing for a 1:1 DM. Note: the composer inserts the handle as text — a
+   *  functional Discord ping needs `<@id>`, which is deferred (ADR-024). */
+  async searchMembers(chatId: string, query: string): Promise<Member[]> {
+    const ch = (await this.resolveChannel(chatId)) as unknown as
+      | MentionChannelLike
+      | undefined;
+    if (!ch) {
+      return [];
+    }
+    // Group DM: filter its recipients locally (no member-search endpoint).
+    if (ch.recipients && !ch.guild) {
+      const q = query.toLowerCase();
+      const out: Member[] = [];
+      for (const u of ch.recipients.values()) {
+        const name = u.globalName || u.username;
+        if (
+          !q ||
+          u.username.toLowerCase().startsWith(q) ||
+          (u.globalName ?? "").toLowerCase().startsWith(q)
+        ) {
+          out.push({ id: u.id, name, username: u.username });
+        }
+        if (out.length >= 8) {
+          break;
+        }
+      }
+      return out;
+    }
+    // Guild channel/thread: member fetch by query over the gateway (needs a
+    // prefix to match on; the REST search endpoint is bot-only → Missing Access).
+    if (ch.guild?.members?.fetch && query.trim()) {
+      try {
+        const found = await ch.guild.members.fetch({ query, limit: 8 });
+        return [...found.values()].map((m) => ({
+          id: m.user.id,
+          name: m.displayName || m.user.globalName || m.user.username,
+          username: m.user.username,
+        }));
+      } catch (err) {
+        console.warn(
+          "[Yapper/Discord] searchMembers failed:",
+          (err as Error)?.message
+        );
+        return [];
+      }
+    }
+    return []; // 1:1 DM (or an empty guild query) — nothing to offer.
   }
 
   /** A lightweight image preview (resized via Discord's media proxy). Video/

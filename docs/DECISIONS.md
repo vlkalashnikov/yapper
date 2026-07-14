@@ -718,3 +718,32 @@ poll/reactions.
   для карточки достаточно; пагинация shared media отложена;
 - `topicId` (форум-тред) поддержан — ищем в треде, маппим обратно в
   `chatId`+`topicId`.
+
+---
+
+# ADR-024
+
+## Discord: @-mention автокомплит через gateway-fetch
+
+Попап участников при вводе `@` в композере (UI уже есть — webview шлёт
+`searchMembers`, host отвечает `provider.searchMembers`). Реализуем метод.
+
+Решение
+
+- **канал сервера / тред** → `guild.members.fetch({ query, limit: 8 })`.
+  **Не** REST `members.search`: тот **bot-only**, у user-аккаунта отдаёт
+  `Missing Access` (50001). `fetch` с query шлёт gateway-оп
+  `REQUEST_GUILD_MEMBERS` (op 8) и ждёт `GUILD_MEMBERS_CHUNK` — путь, доступный
+  self-bot'у. Имя = `displayName` (ник) → globalName → username;
+- **групповой DM** → у групп нет member-search endpoint, фильтруем `recipients`
+  локально по префиксу (username/globalName);
+- **1:1 DM** (или пустой guild-query) → пусто.
+
+Ограничение (осознанно)
+
+- композер вставляет **`@username` текстом** (общий webview, ADR-004) — у
+  Telegram это функциональный пинг, у Discord функциональное упоминание — это
+  `<@id>`. Значит у Discord это **автокомплит-подсказка** (помогает набрать
+  верный ник), а не кликабельный пинг. Настоящий пинг требует mention-«пиллов» в
+  композере (`@name` в UI → `<@id>` в тексте) — отдельная большая UI-поверхность,
+  провайдеро-агностичная; отложено.

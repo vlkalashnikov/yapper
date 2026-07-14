@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   Telegram (ADR-022). Global search is still to come.
 - **Discord**: **shared media** — the profile card's Media and Files tabs list a
   chat's photos/videos and documents, built on the same search (ADR-023).
+- **Discord**: **`@`-mention autocomplete** — typing `@` in a server channel
+  suggests members (via the gateway, so a user account can use it), and group
+  DMs suggest recipients. Inserted as text for now, not a functional ping
+  (ADR-024).
 
 ## [1.2.1] - 2026-07-14
 

@@ -25,9 +25,10 @@
   аватары авторов, разделение Direct Messages/серверы, иконки по типу (`#`
   каналы), **профиль-карточки** (личка/группа/канал/автор).
   Плюс read-only mute — уважаем mute серверов/каналов из офиц. приложения
-  (тихо + 🔇), без тумблера; DM либа не отдаёт (ADR-021).
-  **Остаётся:** поиск (в чате + глобальный), @-mention автокомплит
-  (`searchMembers`), shared media (`getSharedMedia`), историческое непрочитанное
-  (read-state / `acknowledge` в либе нет), poll/reactions, тумблер mute + кнопка
-  mute/search в карточке (появятся, когда будут методы), mute для DM. Плюс:
-  отправка — best-effort из-за CAPTCHA (ADR-019).
+  (тихо + 🔇), без тумблера; DM либа не отдаёт (ADR-021). Плюс поиск в чате —
+  `searchMessages` через `channel.messages.search` (ADR-022).
+  **Остаётся:** глобальный поиск (у Discord нет cross-guild endpoint —
+  итерировать серверы), @-mention автокомплит (`searchMembers`), shared media
+  (`getSharedMedia`), историческое непрочитанное (read-state / `acknowledge` в
+  либе нет), poll/reactions, тумблер mute в карточке (появится, когда будет
+  метод), mute для DM. Плюс: отправка — best-effort из-за CAPTCHA (ADR-019).

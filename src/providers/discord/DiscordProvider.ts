@@ -39,6 +39,15 @@ interface MessagesLike {
     after?: string;
     around?: string;
   }): Promise<{ values(): Iterable<unknown> }>;
+  /** In-channel search (guild endpoint for server channels, channel endpoint for
+   *  DMs). Present on real channels; optional so the mock/narrow view is happy. */
+  search?(options: {
+    content?: string;
+    limit?: number;
+    channels?: string[];
+    sortBy?: string;
+    sortOrder?: string;
+  }): Promise<{ messages: { values(): Iterable<unknown> } }>;
 }
 interface ThreadLike {
   id: string;
@@ -50,6 +59,9 @@ interface ChannelLike {
   id: string;
   type: string;
   name?: string | null;
+  /** Set on guild channels/threads (their parent guild); absent on DMs. Drives
+   *  whether search uses the guild-scoped endpoint. */
+  guildId?: string | null;
   /** Guild channels: whether the current user can view it (false → skip/hide). */
   viewable?: boolean;
   recipient?: { globalName?: string | null; username: string; displayAvatarURL(): string };
@@ -483,6 +495,61 @@ export class DiscordProvider implements Messenger {
     topicId?: string
   ): Promise<Message[]> {
     return this.fetchPage(chatId, topicId, { around: messageId });
+  }
+
+  /** Search messages within a chat (or a forum thread), newest first. Uses
+   *  Discord's channel search: the guild endpoint scoped to this channel for
+   *  server channels, the channel endpoint for DMs. */
+  async searchMessages(
+    chatId: string,
+    query: string,
+    topicId?: string
+  ): Promise<Message[]> {
+    const targetId = topicId ?? chatId;
+    const target = await this.resolveChannel(targetId);
+    if (!target?.messages?.search) {
+      return [];
+    }
+    let found: { messages: { values(): Iterable<unknown> } };
+    try {
+      found = await target.messages.search({
+        content: query,
+        // Discord caps message search at 25 per page.
+        limit: 25,
+        // Scope a server search to this channel; DM search is already channel-scoped.
+        ...(target.guildId ? { channels: [targetId] } : {}),
+        sortBy: "timestamp",
+        sortOrder: "desc",
+      });
+    } catch {
+      // e.g. Missing Access, or search unavailable — show no results.
+      return [];
+    }
+    const me = this.client?.user?.id;
+    const keptRaws: unknown[] = [];
+    const msgs: Message[] = [];
+    for (const raw of found.messages.values()) {
+      // A guild search can echo hits from other channels if the channel filter
+      // was dropped; keep only messages actually in this chat/thread.
+      if ((raw as { channelId?: string }).channelId !== targetId) {
+        continue;
+      }
+      try {
+        const msg = toMessage(raw as unknown as DiscordMessageLike, me);
+        if (topicId) {
+          msg.chatId = chatId;
+          msg.topicId = topicId;
+        }
+        this.cacheAttachment(raw);
+        keptRaws.push(raw);
+        msgs.push(msg);
+      } catch {
+        // One malformed hit shouldn't drop the whole result set.
+      }
+    }
+    await this.applyAuthorAvatars(keptRaws, msgs);
+    msgs.sort((a, b) => b.timestamp - a.timestamp);
+    return msgs;
   }
 
   async getAvatar(chatId: string): Promise<string | undefined> {

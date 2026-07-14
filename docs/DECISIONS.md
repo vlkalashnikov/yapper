@@ -657,3 +657,33 @@ poll/reactions.
   (гейтвей-событие в client-event не проброшено) — 🔇 обновляется на следующем
   refresh/сообщении. Тосты подавляются сразу (читаются на лету). Приемлемо для
   read-only BETA, как у WhatsApp.
+
+---
+
+# ADR-022
+
+## Discord: поиск в чате (`searchMessages`)
+
+Поиск сообщений в открытом чате — как у Telegram (кнопка 🔍 в шапке + действие в
+карточке профиля, обе точки уже есть в UI и гейтятся по `caps.search =
+!!provider.searchMessages`). Достаточно реализовать метод — UI не трогаем.
+
+Решение
+
+- **`channel.messages.search`** у либы (`MessageManager.search`): для серверных
+  каналов бьёт guild-endpoint (`/guilds/{id}/messages/search`) со скоупом на
+  канал (`channels:[id]`), для DM — channel-endpoint. Отдаём newest-first.
+- **клиентский фильтр по `channelId`**: guild-поиск при отброшенном channel-
+  фильтре может подмешать хиты из других каналов сервера → оставляем только
+  сообщения самого чата/треда (`raw.channelId === targetId`). Треды ищем по
+  `topicId` (как в `fetchPage`: маппим обратно в `chatId`+`topicId`).
+- **лимит 25** — жёсткий кап Discord на страницу поиска (>25 бросает
+  `MESSAGE_SEARCH_LIMIT`); пагинацию результатов не делаем (QuickPick).
+- переход к хиту переиспользует существующий `getMessagesAround` (jump-to-
+  message), аттачменты кэшируются как в `fetchPage`.
+
+Отложено
+
+- **глобальный поиск** (`searchGlobal`): у Discord нет единого cross-guild
+  endpoint — поиск гилдо-скоупный, пришлось бы итерировать серверы + DM и
+  сливать. Отдельная, более дорогая поверхность; вернёмся при необходимости.

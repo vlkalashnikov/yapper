@@ -11,6 +11,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   servers and their channels are respected (muted chats stay quiet and are
   marked 🔇 in the list), matching WhatsApp. No toggle yet, and DM mutes aren't
   exposed by the library (ADR-021).
+- **Discord**: **in-chat search** — the 🔍 header button (and the profile card)
+  now search messages in the open channel or thread and jump to a hit, same as
+  Telegram (ADR-022). Global search is still to come.
 
 ## [1.2.1] - 2026-07-14
 

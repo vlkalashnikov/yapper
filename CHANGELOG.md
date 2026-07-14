@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Discord**: **in-chat search** — the 🔍 header button (and the profile card)
   now search messages in the open channel or thread and jump to a hit, same as
   Telegram (ADR-022). Global search is still to come.
+- **Discord**: **shared media** — the profile card's Media and Files tabs list a
+  chat's photos/videos and documents, built on the same search (ADR-023).
 
 ## [1.2.1] - 2026-07-14
 

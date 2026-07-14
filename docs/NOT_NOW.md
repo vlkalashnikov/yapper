@@ -26,9 +26,10 @@
   каналы), **профиль-карточки** (личка/группа/канал/автор).
   Плюс read-only mute — уважаем mute серверов/каналов из офиц. приложения
   (тихо + 🔇), без тумблера; DM либа не отдаёт (ADR-021). Плюс поиск в чате —
-  `searchMessages` через `channel.messages.search` (ADR-022).
+  `searchMessages` через `channel.messages.search` (ADR-022), и shared media —
+  вкладки Медиа/Файлы поверх того же поиска с фильтром `has` (ADR-023).
   **Остаётся:** глобальный поиск (у Discord нет cross-guild endpoint —
-  итерировать серверы), @-mention автокомплит (`searchMembers`), shared media
-  (`getSharedMedia`), историческое непрочитанное (read-state / `acknowledge` в
-  либе нет), poll/reactions, тумблер mute в карточке (появится, когда будет
-  метод), mute для DM. Плюс: отправка — best-effort из-за CAPTCHA (ADR-019).
+  итерировать серверы), @-mention автокомплит (`searchMembers`), историческое
+  непрочитанное (read-state / `acknowledge` в либе нет), poll/reactions, тумблер
+  mute в карточке (появится, когда будет метод), mute для DM. Плюс: отправка —
+  best-effort из-за CAPTCHA (ADR-019).

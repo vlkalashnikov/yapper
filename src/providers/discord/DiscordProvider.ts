@@ -43,6 +43,7 @@ interface MessagesLike {
    *  DMs). Present on real channels; optional so the mock/narrow view is happy. */
   search?(options: {
     content?: string;
+    has?: string[];
     limit?: number;
     channels?: string[];
     sortBy?: string;
@@ -527,16 +528,83 @@ export class DiscordProvider implements Messenger {
       console.warn("[Yapper/Discord] searchMessages failed:", (err as Error)?.message);
       return [];
     }
+    const { msgs, raws } = this.mapSearchHits(
+      found,
+      targetId,
+      chatId,
+      topicId,
+      !!target.guildId
+    );
+    await this.applyAuthorAvatars(raws, msgs);
+    msgs.sort((a, b) => b.timestamp - a.timestamp);
+    return msgs;
+  }
+
+  /** Shared media of a chat/thread, newest first: "media" = photos+videos,
+   *  "files" = documents. Built on the same channel search with a `has` filter
+   *  (image/video are separate searches — Discord ANDs multiple `has` values). */
+  async getSharedMedia(
+    chatId: string,
+    kind: "media" | "files",
+    topicId?: string
+  ): Promise<Message[]> {
+    const targetId = topicId ?? chatId;
+    const target = await this.resolveChannel(targetId);
+    if (!target?.messages?.search) {
+      return [];
+    }
+    const search = target.messages.search.bind(target.messages);
+    const isGuild = !!target.guildId;
+    const scope = isGuild ? { channels: [targetId] } : {};
+    const hasSets = kind === "files" ? [["file"]] : [["image"], ["video"]];
+    const pages = await Promise.all(
+      hasSets.map((has) =>
+        search({ has, limit: 25, ...scope, sortBy: "timestamp", sortOrder: "desc" }).catch(
+          (err) => {
+            console.warn(
+              "[Yapper/Discord] getSharedMedia failed:",
+              (err as Error)?.message
+            );
+            return undefined;
+          }
+        )
+      )
+    );
+    const byId = new Map<string, Message>();
+    for (const found of pages) {
+      if (!found) {
+        continue;
+      }
+      const { msgs } = this.mapSearchHits(found, targetId, chatId, topicId, isGuild);
+      for (const m of msgs) {
+        // `has=file` returns every attachment (images included); keep only the
+        // kind this tab wants (mapping sets `hasImage` vs `file` per attachment).
+        if (kind === "files" ? !!m.file : !!m.hasImage) {
+          byId.set(m.id, m);
+        }
+      }
+    }
+    return [...byId.values()].sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  /** Map a channel-search result collection into messages: applies the guild
+   *  channel-scope safety filter (a guild search can echo other channels' hits
+   *  if the library dropped the channel filter; DM search is single-channel and
+   *  may omit channelId, so never filter it), remaps thread hits to
+   *  (chat, topic), and caches attachments for lazy media. */
+  private mapSearchHits(
+    found: { messages: { values(): Iterable<unknown> } },
+    targetId: string,
+    chatId: string,
+    topicId: string | undefined,
+    isGuild: boolean
+  ): { msgs: Message[]; raws: unknown[] } {
     const me = this.client?.user?.id;
-    const keptRaws: unknown[] = [];
     const msgs: Message[] = [];
+    const raws: unknown[] = [];
     for (const raw of found.messages.values()) {
-      // A guild search can echo hits from other channels if the library dropped
-      // the channel filter — keep only messages in this chat/thread. Only applied
-      // to guild channels (DM/group-DM search is inherently single-channel, and
-      // its results may omit channelId, which would wrongly drop every hit).
       const rc = (raw as { channelId?: string }).channelId;
-      if (target.guildId && rc && rc !== targetId) {
+      if (isGuild && rc && rc !== targetId) {
         continue;
       }
       try {
@@ -546,15 +614,13 @@ export class DiscordProvider implements Messenger {
           msg.topicId = topicId;
         }
         this.cacheAttachment(raw);
-        keptRaws.push(raw);
+        raws.push(raw);
         msgs.push(msg);
       } catch {
         // One malformed hit shouldn't drop the whole result set.
       }
     }
-    await this.applyAuthorAvatars(keptRaws, msgs);
-    msgs.sort((a, b) => b.timestamp - a.timestamp);
-    return msgs;
+    return { msgs, raws };
   }
 
   async getAvatar(chatId: string): Promise<string | undefined> {

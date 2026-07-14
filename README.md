@@ -55,7 +55,7 @@ into a chat — and click a `path:line` in a reply to jump right back to the cod
 | Rich text (markdown, mentions, embeds) | ✅ | ✅ | ✅ *(+ Components V2)* |
 | Servers / folders, forum topics | ✅ | ➖ | ✅ *(servers, threads)* |
 | In-chat & global search | ✅ | 🚧 | ✅ *(in-chat)* |
-| Profile cards & shared media | ✅ | 🚧 | 🚧 |
+| Profile cards & shared media | ✅ | 🚧 | ✅ |
 | Mute (respected in notifications) | ✅ *(toggle)* | ✅ *(read-only)* | ✅ *(read-only, servers)* |
 | Chat avatar in the header | ✅ | ✅ *(best-effort)* | ✅ |
 | `@`-mention autocomplete | ✅ | ➖ | 🚧 |
@@ -147,6 +147,8 @@ and servers, right in the editor.
   channels are respected (muted chats stay quiet, marked 🔇), read-only.
 - **In-chat search** — 🔍 in the conversation header (or the profile card)
   searches messages in the open channel / thread and jumps to a hit.
+- **Shared media** — the profile card's **Media** and **Files** tabs list a
+  chat's photos/videos and documents.
 
 **On the way** — global (all-chats) search, and a mute toggle (DM mutes aren't
 exposed by the library yet).

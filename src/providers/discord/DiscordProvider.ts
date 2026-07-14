@@ -521,17 +521,22 @@ export class DiscordProvider implements Messenger {
         sortBy: "timestamp",
         sortOrder: "desc",
       });
-    } catch {
-      // e.g. Missing Access, or search unavailable — show no results.
+    } catch (err) {
+      // e.g. Missing Access, or search unavailable — show no results (but log,
+      // so a real API error isn't indistinguishable from "no matches").
+      console.warn("[Yapper/Discord] searchMessages failed:", (err as Error)?.message);
       return [];
     }
     const me = this.client?.user?.id;
     const keptRaws: unknown[] = [];
     const msgs: Message[] = [];
     for (const raw of found.messages.values()) {
-      // A guild search can echo hits from other channels if the channel filter
-      // was dropped; keep only messages actually in this chat/thread.
-      if ((raw as { channelId?: string }).channelId !== targetId) {
+      // A guild search can echo hits from other channels if the library dropped
+      // the channel filter — keep only messages in this chat/thread. Only applied
+      // to guild channels (DM/group-DM search is inherently single-channel, and
+      // its results may omit channelId, which would wrongly drop every hit).
+      const rc = (raw as { channelId?: string }).channelId;
+      if (target.guildId && rc && rc !== targetId) {
         continue;
       }
       try {

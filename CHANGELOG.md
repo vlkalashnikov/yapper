@@ -3,6 +3,29 @@
 All notable changes to the Yapper extension are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.1] - 2026-07-14
+
+### Added
+
+- **Discord**: per-message author avatars in group and server chats.
+- **Discord**: DMs and group DMs are grouped into a **Direct Messages** folder,
+  and each server gets its own folder (no catch-all "All chats").
+- **Discord**: profile cards for DMs, group DMs, channels, and message authors.
+- **Chat-list icons by type**: Discord text channels show `#`; Telegram private
+  chats a person, groups a group icon, and broadcast channels a megaphone.
+
+### Fixed
+
+- Profile cards only show the **Mute / Search / Media / Files** buttons for
+  messengers that actually support them (Discord shows info only).
+- Clicking a link in a message opens it **once** — VS Code's webview no longer
+  opens a second browser tab alongside Yapper's handler.
+- Profile usernames link out only when the provider supplies a URL (Telegram
+  t.me); Discord shows plain text instead of a wrong t.me link, with a single
+  leading `@`.
+- Markdown image syntax `![alt](url)` renders as a masked link.
+- The profile card no longer hangs on a spinner when a provider errors.
+
 ## [1.2.0] - 2026-07-14
 
 ### Added

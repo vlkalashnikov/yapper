@@ -15,7 +15,9 @@ import {
   guildFolderId,
   attachmentInfo,
   extFromMime,
+  channelMuted,
   DiscordMessageLike,
+  GuildSettingsLike,
 } from "./helpers";
 import { QrLoginPanel, QrLoginText } from "../../ui/QrLoginPanel";
 
@@ -60,6 +62,8 @@ interface GuildLike {
   id: string;
   name: string;
   channels: { cache: { values(): Iterable<ChannelLike> } };
+  /** Per-user notification settings (mute), read-only. See ADR-021. */
+  settings?: GuildSettingsLike;
 }
 /** A message attachment as we cache it for lazy media loading. */
 interface RawAttachment {
@@ -385,10 +389,11 @@ export class DiscordProvider implements Messenger {
     const guilds = client.guilds.cache as unknown as {
       values(): Iterable<GuildLike>;
     };
+    const now = Date.now();
     for (const g of guilds.values()) {
       for (const ch of g.channels.cache.values()) {
         if (isVisibleGuildChannel(ch)) {
-          chats.push(this.guildChat(ch));
+          chats.push(this.guildChat(ch, channelMuted(g.settings, ch.id, now)));
         }
       }
     }
@@ -687,8 +692,15 @@ export class DiscordProvider implements Messenger {
     this.unreadCounts.delete(chatId);
   }
 
-  isChatMuted(): boolean {
-    return false;
+  /** Whether a chat is muted, read live from Discord's notification settings
+   *  (set in the official app). Guild channels only — DMs aren't covered, since
+   *  Discord doesn't sync their mute state to this library. See ADR-021.
+   *  Synchronous (reads the channel cache), as the Messenger interface requires. */
+  isChatMuted(chatId: string): boolean {
+    const ch = this.client?.channels.cache.get(chatId) as unknown as
+      | { guild?: { settings?: GuildSettingsLike } }
+      | undefined;
+    return channelMuted(ch?.guild?.settings, chatId, Date.now());
   }
 
   // --- internals ---
@@ -708,7 +720,7 @@ export class DiscordProvider implements Messenger {
     };
   }
 
-  private guildChat(ch: ChannelLike): Chat {
+  private guildChat(ch: ChannelLike, muted: boolean): Chat {
     const isForum = ch.type === "GUILD_FORUM";
     return {
       id: ch.id,
@@ -717,6 +729,7 @@ export class DiscordProvider implements Messenger {
       unreadCount: this.unreadCounts.get(ch.id),
       // Text/news channels get Discord's "#" glyph; forums stay expandable.
       icon: isForum ? undefined : "symbol-number",
+      muted: muted || undefined,
     };
   }
 

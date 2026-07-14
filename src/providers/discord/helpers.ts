@@ -272,3 +272,66 @@ export function guildFolderId(guildId: string, seen: Map<string, number>): numbe
   }
   return id;
 }
+
+/* --- Mute (read-only) ---
+ * Discord stores per-user notification settings per guild: a whole-guild mute
+ * plus per-channel overrides. The provider reads them live from
+ * `guild.settings` (kept current by the library's USER_GUILD_SETTINGS_UPDATE
+ * handler) to respect mutes set in the official app — we never write them
+ * (the library has no reliable API). DMs aren't covered (Discord drops the
+ * guild_id=null settings entry). See ADR-021. */
+
+/** A per-channel notification override, as Discord sends it (raw snake_case). */
+export interface RawChannelOverride {
+  channel_id: string;
+  muted?: boolean;
+  mute_config?: { end_time?: string | null } | null;
+}
+
+/** The bits of the library's GuildSettingManager we read for mute. `muteConfig`
+ *  is already a Date (the manager parses it); channel overrides stay raw. */
+export interface GuildSettingsLike {
+  muted?: boolean;
+  muteConfig?: { endTime?: Date } | null;
+  channelOverrides?: RawChannelOverride[];
+}
+
+/** Whether a mute is in effect now: the flag is on, and it's either permanent
+ *  (no end time) or the end time is still in the future. `endTimeMs` null/NaN =
+ *  permanent (Discord sends `mute_config: null` for a forever-mute). */
+export function muteActive(
+  muted: boolean | undefined,
+  endTimeMs: number | null | undefined,
+  now: number
+): boolean {
+  if (!muted) {
+    return false;
+  }
+  if (endTimeMs === null || endTimeMs === undefined || Number.isNaN(endTimeMs)) {
+    return true;
+  }
+  return endTimeMs > now;
+}
+
+/** Whether a guild channel is silenced: by its own channel override, or by a
+ *  whole-guild mute (which mutes every channel). Timed mutes are honored. */
+export function channelMuted(
+  settings: GuildSettingsLike | undefined,
+  channelId: string,
+  now: number
+): boolean {
+  if (!settings) {
+    return false;
+  }
+  const ov = settings.channelOverrides?.find((o) => o.channel_id === channelId);
+  if (ov) {
+    const end = ov.mute_config?.end_time
+      ? Date.parse(ov.mute_config.end_time)
+      : null;
+    if (muteActive(ov.muted, end, now)) {
+      return true;
+    }
+  }
+  const guildEnd = settings.muteConfig?.endTime?.getTime();
+  return muteActive(settings.muted, guildEnd ?? null, now);
+}

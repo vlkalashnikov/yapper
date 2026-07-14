@@ -3,6 +3,15 @@
 All notable changes to the Yapper extension are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+
+- **Discord**: read-only **mute** — mutes set in the official Discord app for
+  servers and their channels are respected (muted chats stay quiet and are
+  marked 🔇 in the list), matching WhatsApp. No toggle yet, and DM mutes aren't
+  exposed by the library (ADR-021).
+
 ## [1.2.1] - 2026-07-14
 
 ### Added

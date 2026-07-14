@@ -24,8 +24,10 @@
   embeds/Components V2/форварды/системные), медиа, editor-шаринг; + полиш:
   аватары авторов, разделение Direct Messages/серверы, иконки по типу (`#`
   каналы), **профиль-карточки** (личка/группа/канал/автор).
-  **Остаётся:** поиск (в чате + глобальный), mute (Discord notification
-  settings), @-mention автокомплит (`searchMembers`), shared media
-  (`getSharedMedia`), историческое непрочитанное (read-state / `acknowledge` в
-  либе нет), poll/reactions, кнопка mute/search в карточке (появятся, когда
-  будут методы). Плюс: отправка — best-effort из-за CAPTCHA (ADR-019).
+  Плюс read-only mute — уважаем mute серверов/каналов из офиц. приложения
+  (тихо + 🔇), без тумблера; DM либа не отдаёт (ADR-021).
+  **Остаётся:** поиск (в чате + глобальный), @-mention автокомплит
+  (`searchMembers`), shared media (`getSharedMedia`), историческое непрочитанное
+  (read-state / `acknowledge` в либе нет), poll/reactions, тумблер mute + кнопка
+  mute/search в карточке (появятся, когда будут методы), mute для DM. Плюс:
+  отправка — best-effort из-за CAPTCHA (ADR-019).

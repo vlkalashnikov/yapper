@@ -4,6 +4,8 @@ import {
   extFromMime,
   guildFolderId,
   toMessage,
+  muteActive,
+  channelMuted,
   DiscordMessageLike,
 } from "./helpers";
 
@@ -210,5 +212,64 @@ describe("guildFolderId", () => {
     expect(guildFolderId("222", seen)).toBe(3);
     expect(guildFolderId("111", seen)).toBe(2); // stable
     expect(guildFolderId("333", seen)).toBe(4);
+  });
+});
+
+describe("muteActive", () => {
+  const now = 1_000_000;
+  it("is false when not muted", () => {
+    expect(muteActive(false, null, now)).toBe(false);
+    expect(muteActive(undefined, now + 1000, now)).toBe(false);
+  });
+  it("treats no end time (or NaN) as a permanent mute", () => {
+    expect(muteActive(true, null, now)).toBe(true);
+    expect(muteActive(true, undefined, now)).toBe(true);
+    expect(muteActive(true, NaN, now)).toBe(true);
+  });
+  it("honors a timed mute's end time", () => {
+    expect(muteActive(true, now + 1000, now)).toBe(true); // future → muted
+    expect(muteActive(true, now - 1000, now)).toBe(false); // expired → not muted
+  });
+});
+
+describe("channelMuted", () => {
+  const now = 1_000_000;
+  it("is false without settings", () => {
+    expect(channelMuted(undefined, "c1", now)).toBe(false);
+    expect(channelMuted({}, "c1", now)).toBe(false);
+  });
+  it("mutes a channel by its own override", () => {
+    const s = { channelOverrides: [{ channel_id: "c1", muted: true }] };
+    expect(channelMuted(s, "c1", now)).toBe(true);
+    expect(channelMuted(s, "c2", now)).toBe(false); // other channel unaffected
+  });
+  it("honors a timed channel override", () => {
+    const future = new Date(now + 5000).toISOString();
+    const past = new Date(now - 5000).toISOString();
+    expect(
+      channelMuted(
+        { channelOverrides: [{ channel_id: "c1", muted: true, mute_config: { end_time: future } }] },
+        "c1",
+        now
+      )
+    ).toBe(true);
+    expect(
+      channelMuted(
+        { channelOverrides: [{ channel_id: "c1", muted: true, mute_config: { end_time: past } }] },
+        "c1",
+        now
+      )
+    ).toBe(false);
+  });
+  it("mutes every channel when the whole guild is muted", () => {
+    expect(channelMuted({ muted: true }, "any", now)).toBe(true);
+  });
+  it("respects a guild mute's end time", () => {
+    expect(
+      channelMuted({ muted: true, muteConfig: { endTime: new Date(now - 1) } }, "c1", now)
+    ).toBe(false);
+    expect(
+      channelMuted({ muted: true, muteConfig: { endTime: new Date(now + 1) } }, "c1", now)
+    ).toBe(true);
   });
 });

@@ -56,7 +56,7 @@ into a chat — and click a `path:line` in a reply to jump right back to the cod
 | Servers / folders, forum topics | ✅ | ➖ | ✅ *(servers, threads)* |
 | In-chat & global search | ✅ | 🚧 | 🚧 |
 | Profile cards & shared media | ✅ | 🚧 | 🚧 |
-| Mute (respected in notifications) | ✅ *(toggle)* | ✅ *(read-only)* | 🚧 |
+| Mute (respected in notifications) | ✅ *(toggle)* | ✅ *(read-only)* | ✅ *(read-only, servers)* |
 | Chat avatar in the header | ✅ | ✅ *(best-effort)* | ✅ |
 | `@`-mention autocomplete | ✅ | ➖ | 🚧 |
 | **Share code / file / diff / commit** | ✅ | ✅ | ✅ *(best-effort)* |
@@ -143,8 +143,11 @@ and servers, right in the editor.
   **Components V2** bot messages all render.
 - **Incoming media** — image previews, a lightbox, and file downloads.
 - **Editor sharing** — send code, files, diffs and commits, same as Telegram.
+- **Mute** — mutes you set in the official Discord app for servers and their
+  channels are respected (muted chats stay quiet, marked 🔇), read-only.
 
-**On the way** — search, profile cards, and mute.
+**On the way** — search, and a mute toggle (DM mutes aren't exposed by the
+library yet).
 
 **Get started**
 

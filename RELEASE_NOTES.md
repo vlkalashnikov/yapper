@@ -6,18 +6,21 @@ release; the authoritative history lives in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
-## v1.2.1 — Discord polish
+## v1.3.0 — Discord: mute, search, shared media & mentions
+
+Brings the Discord (BETA) provider much closer to Telegram.
 
 ### Added
-- Discord: per-message author avatars in group/server chats.
-- Discord: DMs grouped into a "Direct Messages" folder; each server its own folder.
-- Discord: profile cards (DMs, group DMs, channels, message authors).
-- Chat-list icons by type: Discord "#" channels; Telegram person / group / megaphone.
+- Discord: read-only **mute** — mutes set in the official Discord app for servers
+  and their channels are respected (muted chats stay quiet, marked 🔇). No toggle
+  yet, and DM mutes aren't exposed by the library.
+- Discord: **in-chat search** — the 🔍 header button (and the profile card) search
+  messages in the open channel or thread and jump to a hit. Global search is still
+  to come.
+- Discord: **shared media** — the profile card's Media and Files tabs list a
+  chat's photos/videos and documents.
+- Discord: **`@`-mention autocomplete** — typing `@` in a server channel suggests
+  members (via the gateway, so a user account can use it); group DMs suggest
+  recipients. Inserted as text for now, not a functional ping.
 
-### Fixed
-- Profile cards show Mute/Search/Media only for messengers that support them.
-- Links in messages open once (no duplicate browser tab).
-- Profile username links out only when the provider gives a URL (Telegram t.me).
-- `![alt](url)` renders as a masked link; profile card no longer hangs on error.
-
-📎 Download: `yapper-1.2.1.vsix`
+📎 Download: `yapper-1.3.0.vsix`

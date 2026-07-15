@@ -261,7 +261,13 @@ export class ConversationPanel {
 
     panel.webview.onDidReceiveMessage(async (msg) => {
       if (msg.type === "send") {
-        await this.handleSend(msg.chatId, msg.text, msg.replyToId, msg.mentions);
+        await this.handleSend(
+          msg.chatId,
+          msg.text,
+          msg.replyToId,
+          msg.mentions,
+          msg.reply
+        );
       } else if (msg.type === "retry" && this.currentChat) {
         await this.showChat(this.currentChat);
       } else if (msg.type === "requestMedia") {
@@ -480,7 +486,8 @@ export class ConversationPanel {
     chatId: string,
     text: string,
     replyToId?: string,
-    mentions?: MentionRef[]
+    mentions?: MentionRef[],
+    reply?: { id: string; author: string; text: string }
   ): Promise<void> {
     if (!this.provider.sendMessage) {
       return;
@@ -493,6 +500,12 @@ export class ConversationPanel {
         this.currentChat?.topicId,
         mentions
       );
+      // Providers don't reliably echo the reply reference back on the sent
+      // message, so the optimistic append would look like a plain message until
+      // a refetch. Carry the composer's reply preview through (provider-agnostic).
+      if (reply && !message.reply) {
+        message.reply = reply;
+      }
       void this.panel?.webview.postMessage({ type: "append", message });
     } catch (err) {
       void vscode.window.showErrorMessage(

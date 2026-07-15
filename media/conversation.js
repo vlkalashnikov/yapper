@@ -1373,6 +1373,11 @@
       chatId: currentChatId,
       text,
       replyToId: replyingTo ? replyingTo.id : undefined,
+      // Pass the reply preview (id + author + text) so the optimistic echo
+      // renders as a reply immediately — providers don't reliably echo it back.
+      reply: replyingTo
+        ? { id: replyingTo.id, author: replyingTo.author, text: replyingTo.text }
+        : undefined,
       mentions: mentions.length ? mentions : undefined,
     });
     input.value = "";

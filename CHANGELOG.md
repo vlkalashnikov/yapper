@@ -11,6 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   — they're sent as `<@id>`, so the mentioned person is actually notified. Only
   mentions picked from the popup ping; plain `@text` you type doesn't (ADR-025).
 
+### Fixed
+
+- Replying to a message now shows your sent message as a reply **immediately**,
+  with the quoted author and text, instead of looking like a plain message until
+  the view refreshed (all providers).
+
 ## [1.3.0] - 2026-07-14
 
 ### Added

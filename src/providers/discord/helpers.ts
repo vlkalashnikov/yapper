@@ -273,6 +273,35 @@ export function guildFolderId(guildId: string, seen: Map<string, number>): numbe
   return id;
 }
 
+/** Escape a string for literal use inside a RegExp. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Turn picked `@username` mentions into Discord's functional `<@id>` form so
+ *  they actually ping. Only the exact picked handles are replaced (a following
+ *  word/`.` char blocks partial matches like `@bob` inside `@bobby`), so plain
+ *  `@text` the user typed by hand never becomes a ping. */
+export function applyMentions(
+  text: string,
+  mentions?: { id: string; username: string }[]
+): string {
+  if (!mentions?.length) {
+    return text;
+  }
+  let out = text;
+  for (const m of mentions) {
+    if (!m.username || !m.id) {
+      continue;
+    }
+    out = out.replace(
+      new RegExp("@" + escapeRegExp(m.username) + "(?![\\w.])", "g"),
+      `<@${m.id}>`
+    );
+  }
+  return out;
+}
+
 /* --- Mute (read-only) ---
  * Discord stores per-user notification settings per guild: a whole-guild mute
  * plus per-channel overrides. The provider reads them live from

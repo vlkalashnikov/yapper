@@ -5,6 +5,7 @@ import type {
   Folder,
   MediaFile,
   Member,
+  MentionRef,
   Message,
   Messenger,
   Profile,
@@ -17,6 +18,7 @@ import {
   attachmentInfo,
   extFromMime,
   channelMuted,
+  applyMentions,
   DiscordMessageLike,
   GuildSettingsLike,
 } from "./helpers";
@@ -821,10 +823,12 @@ export class DiscordProvider implements Messenger {
     chatId: string,
     text: string,
     replyToId?: string,
-    topicId?: string
+    topicId?: string,
+    mentions?: MentionRef[]
   ): Promise<Message> {
     return this.send(chatId, topicId, {
-      content: text,
+      // Turn picked @-mentions into `<@id>` so they actually ping.
+      content: applyMentions(text, mentions),
       ...(replyToId
         ? { reply: { messageReference: replyToId, failIfNotExists: false } }
         : {}),

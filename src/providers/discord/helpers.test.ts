@@ -6,6 +6,7 @@ import {
   toMessage,
   muteActive,
   channelMuted,
+  applyMentions,
   DiscordMessageLike,
 } from "./helpers";
 
@@ -212,6 +213,47 @@ describe("guildFolderId", () => {
     expect(guildFolderId("222", seen)).toBe(3);
     expect(guildFolderId("111", seen)).toBe(2); // stable
     expect(guildFolderId("333", seen)).toBe(4);
+  });
+});
+
+describe("applyMentions", () => {
+  it("returns text unchanged with no mentions", () => {
+    expect(applyMentions("hi @bob", [])).toBe("hi @bob");
+    expect(applyMentions("hi @bob")).toBe("hi @bob");
+  });
+  it("replaces a picked handle with a Discord ping", () => {
+    expect(applyMentions("hey @bob!", [{ username: "bob", id: "1" }])).toBe(
+      "hey <@1>!"
+    );
+  });
+  it("replaces every occurrence of the picked handle", () => {
+    expect(
+      applyMentions("@bob @bob", [{ username: "bob", id: "1" }])
+    ).toBe("<@1> <@1>");
+  });
+  it("doesn't touch a longer handle that starts the same", () => {
+    // @bob must not match inside @bobby (word/`.` boundary).
+    expect(
+      applyMentions("@bobby and @bob", [{ username: "bob", id: "1" }])
+    ).toBe("@bobby and <@1>");
+  });
+  it("leaves unpicked @text alone (no accidental pings)", () => {
+    expect(applyMentions("@carol", [{ username: "bob", id: "1" }])).toBe(
+      "@carol"
+    );
+  });
+  it("handles handles with regex-special / dotted usernames", () => {
+    expect(
+      applyMentions("ping @a.b_c", [{ username: "a.b_c", id: "9" }])
+    ).toBe("ping <@9>");
+  });
+  it("applies multiple distinct mentions", () => {
+    expect(
+      applyMentions("@a @b", [
+        { username: "a", id: "1" },
+        { username: "b", id: "2" },
+      ])
+    ).toBe("<@1> <@2>");
   });
 });
 

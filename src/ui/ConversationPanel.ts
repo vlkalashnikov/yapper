@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { Chat, MediaFile, Message, MessengerProvider, Profile } from "../providers/types";
+import { Chat, MediaFile, MentionRef, Message, MessengerProvider, Profile } from "../providers/types";
 import { parseTelegramLink } from "../util/telegramLinks";
 
 /**
@@ -261,7 +261,7 @@ export class ConversationPanel {
 
     panel.webview.onDidReceiveMessage(async (msg) => {
       if (msg.type === "send") {
-        await this.handleSend(msg.chatId, msg.text, msg.replyToId);
+        await this.handleSend(msg.chatId, msg.text, msg.replyToId, msg.mentions);
       } else if (msg.type === "retry" && this.currentChat) {
         await this.showChat(this.currentChat);
       } else if (msg.type === "requestMedia") {
@@ -479,7 +479,8 @@ export class ConversationPanel {
   private async handleSend(
     chatId: string,
     text: string,
-    replyToId?: string
+    replyToId?: string,
+    mentions?: MentionRef[]
   ): Promise<void> {
     if (!this.provider.sendMessage) {
       return;
@@ -489,7 +490,8 @@ export class ConversationPanel {
         chatId,
         text,
         replyToId,
-        this.currentChat?.topicId
+        this.currentChat?.topicId,
+        mentions
       );
       void this.panel?.webview.postMessage({ type: "append", message });
     } catch (err) {

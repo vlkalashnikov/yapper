@@ -56,6 +56,15 @@ export interface Member {
   username?: string;
 }
 
+/** An @-mention the user picked from autocomplete, passed to sendMessage so a
+ *  provider can serialize it into its own mention syntax (Discord `<@id>`).
+ *  Providers whose `@username` is already a functional mention (Telegram) ignore
+ *  it. Only picked mentions are converted, so plain `@text` never pings. */
+export interface MentionRef {
+  id: string;
+  username: string;
+}
+
 /** A message hit from global (all-chats) search. */
 export interface GlobalHit {
   chatId: string;
@@ -260,12 +269,15 @@ export interface MessengerProvider {
    * Send a message to a chat and return the created message.
    * Optional: not every provider/stage supports sending yet
    * (real Telegram sending lands in a later stage).
+   * `mentions` carries @-mentions the user picked from autocomplete, for
+   * providers that need to serialize them (Discord `<@id>`); others ignore it.
    */
   sendMessage?(
     chatId: string,
     text: string,
     replyToId?: string,
-    topicId?: string
+    topicId?: string,
+    mentions?: MentionRef[]
   ): Promise<Message>;
 
   /** Send a message whose entire body is a code block (monospace). */

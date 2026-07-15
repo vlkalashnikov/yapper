@@ -3,6 +3,14 @@
 All notable changes to the Yapper extension are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+
+- **Discord**: `@`-mentions picked from autocomplete are now **functional pings**
+  — they're sent as `<@id>`, so the mentioned person is actually notified. Only
+  mentions picked from the popup ping; plain `@text` you type doesn't (ADR-025).
+
 ## [1.3.0] - 2026-07-14
 
 ### Added

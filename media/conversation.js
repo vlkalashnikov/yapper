@@ -88,6 +88,10 @@
   let mentionItems = [];
   let mentionIndex = 0;
   let mentionTimer = null;
+  // Mentions picked from the popup: { username, id }. Sent with the message so a
+  // provider can turn them into a real ping (Discord <@id>); cleared on send /
+  // chat switch. Only picked handles ping — plain @text the user typed doesn't.
+  let pickedMentions = [];
 
   function initial(name) {
     return (name || "?").trim().charAt(0).toUpperCase() || "?";
@@ -975,6 +979,7 @@
     pendingJump = null;
     mediaCache.clear();
     hideMentionPopup();
+    pickedMentions = []; // don't carry a picked mention into another chat
     cancelReply();
     cancelImage();
     closeProfile(); // opening a chat (e.g. via a t.me link) closes overlays
@@ -1346,6 +1351,7 @@
       });
       input.value = "";
       input.style.height = "auto";
+      pickedMentions = [];
       cancelImage();
       cancelReply();
       updateSendState();
@@ -1354,14 +1360,24 @@
     if (!text) {
       return;
     }
+    // Only send mentions still present in the text, deduped by id.
+    const seen = new Set();
+    const mentions = pickedMentions.filter(
+      (m) =>
+        text.includes("@" + m.username) &&
+        !seen.has(m.id) &&
+        seen.add(m.id)
+    );
     vscode.postMessage({
       type: "send",
       chatId: currentChatId,
       text,
       replyToId: replyingTo ? replyingTo.id : undefined,
+      mentions: mentions.length ? mentions : undefined,
     });
     input.value = "";
     input.style.height = "auto";
+    pickedMentions = [];
     cancelReply();
     updateSendState();
   }
@@ -1451,6 +1467,11 @@
     const before = input.value.slice(0, mentionStart);
     const after = input.value.slice(input.selectionStart);
     const token = member.username ? "@" + member.username : member.name;
+    // Remember the pick so send() can turn it into a functional mention. Only
+    // handles (username + id) are resolvable; a bare display name can't ping.
+    if (member.username && member.id) {
+      pickedMentions.push({ username: member.username, id: member.id });
+    }
     const insert = token + " ";
     input.value = before + insert + after;
     const caret = (before + insert).length;

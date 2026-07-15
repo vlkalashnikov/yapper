@@ -3,6 +3,15 @@
 All notable changes to the Yapper extension are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixed
+
+- The unread badge on the Yapper icon no longer counts **muted** chats (mirrors
+  Telegram). A single muted group sitting on tens of thousands of unread
+  messages was swamping the badge — it now reflects only chats you actually get
+  notified about.
+
 ## [1.3.1] - 2026-07-15
 
 ### Added

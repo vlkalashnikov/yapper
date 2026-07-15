@@ -194,8 +194,14 @@ export class ChatTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     const folders = (await this.provider.getFolders?.(chats)) ?? [];
     this.chatById = new Map(chats.map((c) => [c.id, c]));
 
-    // Surface the total unread count for the activity-bar badge.
-    const totalUnread = chats.reduce((n, c) => n + (c.unreadCount ?? 0), 0);
+    // Surface the unread count for the activity-bar badge. Muted chats don't
+    // feed it (mirrors Telegram): they're silent by definition, and a single
+    // muted group can sit on tens of thousands of unread messages the user
+    // never intends to read, which would swamp the badge.
+    const totalUnread = chats.reduce(
+      (n, c) => (c.muted ? n : n + (c.unreadCount ?? 0)),
+      0
+    );
     this._onDidChangeBadge.fire(totalUnread);
 
     // Archived chats are shown only under a dedicated Archive folder, never in

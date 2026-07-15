@@ -1078,6 +1078,8 @@ export class TelegramProvider implements Messenger {
       entities,
       topicId: topicOf(m),
       edited: !!m.editDate,
+      forwarded: !!m.fwdFrom,
+      forwardedFrom: forwardOrigin(m),
       status: this.outgoingStatus(chatId, outgoing, m.id),
     };
   }
@@ -1347,16 +1349,37 @@ function entityTitle(e?: EntityLike): string {
   return "—";
 }
 
-function senderName(m: Api.Message): string {
-  const sender = m.sender as
+/** Display name of a Telegram entity (user, channel, or chat), or undefined. */
+function entityName(entity: unknown): string | undefined {
+  const e = entity as
     | { firstName?: string; lastName?: string; title?: string; username?: string }
     | undefined;
-  if (!sender) {
-    return "—";
+  if (!e) {
+    return undefined;
   }
-  const fullName = [sender.firstName, sender.lastName]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-  return fullName || sender.title || sender.username || "—";
+  const fullName = [e.firstName, e.lastName].filter(Boolean).join(" ").trim();
+  return fullName || e.title || e.username || undefined;
+}
+
+function senderName(m: Api.Message): string {
+  return entityName(m.sender) ?? "—";
+}
+
+/** Origin of a forwarded message, for the "Forwarded from …" label. GramJS
+ *  attaches the source entity (channel/chat via `forward.chat`, user via
+ *  `forward.sender`); falls back to the header's hidden-sender name or a channel
+ *  post's author. Undefined when the source can't be named (privacy). */
+function forwardOrigin(m: Api.Message): string | undefined {
+  const fwd = m.fwdFrom;
+  if (!fwd) {
+    return undefined;
+  }
+  const f = m.forward as { chat?: unknown; sender?: unknown } | undefined;
+  return (
+    entityName(f?.chat) ??
+    entityName(f?.sender) ??
+    fwd.fromName ??
+    fwd.postAuthor ??
+    undefined
+  );
 }

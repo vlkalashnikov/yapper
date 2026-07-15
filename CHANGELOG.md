@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Discord**: `@`-mentions picked from autocomplete are now **functional pings**
   — they're sent as `<@id>`, so the mentioned person is actually notified. Only
   mentions picked from the popup ping; plain `@text` you type doesn't (ADR-025).
+- **Forwarded messages** now show a "↪ Forwarded" marker (all providers), with
+  the origin ("from …") where the provider exposes it (Telegram). WhatsApp hides
+  the original sender and Discord doesn't surface it, so those show just the
+  marker.
 
 ### Fixed
 

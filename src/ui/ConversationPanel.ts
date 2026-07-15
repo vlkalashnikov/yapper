@@ -726,6 +726,8 @@ export class ConversationPanel {
       imageAttached: vscode.l10n.t("Image ready to send"),
       captionPlaceholder: vscode.l10n.t("Add a caption…"),
       edited: vscode.l10n.t("edited"),
+      forwarded: vscode.l10n.t("Forwarded"),
+      forwardedFrom: vscode.l10n.t("Forwarded from {0}", "{0}"),
       goToMessage: vscode.l10n.t("Go to message"),
       message: vscode.l10n.t("Message"),
       you: vscode.l10n.t("You"),

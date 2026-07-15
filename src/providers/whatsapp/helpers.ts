@@ -137,6 +137,26 @@ export function unwrapContent(
   return m;
 }
 
+/** Whether a message was forwarded, from any content type's
+ *  `contextInfo.isForwarded`. WhatsApp hides the original sender, so there's no
+ *  origin name — just the flag. */
+export function isForwarded(m: WAMessage): boolean {
+  const content = unwrapContent(m.message);
+  if (!content) {
+    return false;
+  }
+  for (const v of Object.values(content)) {
+    if (
+      v &&
+      typeof v === "object" &&
+      (v as { contextInfo?: { isForwarded?: boolean } }).contextInfo?.isForwarded
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Plain text of a WhatsApp message, or "" if it carries none (media/other). */
 export function messageText(m: WAMessage): string {
   const msg = unwrapContent(m.message);
@@ -319,6 +339,7 @@ export function toMessage(
     hasImage: media.hasImage,
     mediaKind: media.mediaKind,
     file: media.file,
+    forwarded: isForwarded(m),
     // Read receipts: only for our own messages in 1:1 chats (mirrors Telegram).
     status:
       outgoing && !isGroupJid(chatId) ? mapStatus(m.status) : undefined,

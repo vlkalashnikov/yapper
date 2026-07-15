@@ -425,6 +425,18 @@
   }
 
   // A quoted preview of the replied-to message. Click jumps to the original.
+  // A small "↪ Forwarded [from X]" label shown above a forwarded message's body.
+  function makeForwardLabel(msg) {
+    const el = document.createElement("div");
+    el.className = "forwarded";
+    const label =
+      msg.forwardedFrom && L.forwardedFrom
+        ? L.forwardedFrom.replace("{0}", msg.forwardedFrom)
+        : L.forwarded || "Forwarded";
+    el.textContent = "↪ " + label;
+    return el;
+  }
+
   function makeReplyQuote(reply) {
     const q = document.createElement("div");
     q.className = "reply-quote";
@@ -557,6 +569,9 @@
       el.className = "msg outgoing";
       const bubble = document.createElement("div");
       bubble.className = "bubble";
+      if (msg.forwarded) {
+        bubble.append(makeForwardLabel(msg));
+      }
       if (msg.reply) {
         bubble.append(makeReplyQuote(msg.reply));
       }
@@ -600,6 +615,9 @@
         meta.append(t);
       }
       body.append(meta);
+      if (msg.forwarded) {
+        body.append(makeForwardLabel(msg));
+      }
       if (msg.reply) {
         body.append(makeReplyQuote(msg.reply));
       }

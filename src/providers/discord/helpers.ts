@@ -190,6 +190,10 @@ export function toMessage(m: DiscordMessageLike, meId?: string): Message {
   if (m.editedTimestamp) {
     msg.edited = true;
   }
+  if (isForward) {
+    // Discord's forward carries no simple origin; just mark it forwarded.
+    msg.forwarded = true;
+  }
   // A real reply references another message; a forward is not a reply.
   if (!isForward && m.reference?.messageId) {
     // Preview (author/text) is enriched by the provider from cache when available.

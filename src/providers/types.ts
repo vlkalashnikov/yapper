@@ -159,6 +159,12 @@ export interface Message {
   topicId?: string;
   /** True when the message has been edited. */
   edited?: boolean;
+  /** True when the message was forwarded from elsewhere. */
+  forwarded?: boolean;
+  /** Origin of a forward (channel/user name), where the provider exposes it
+   *  (Telegram). WhatsApp hides the original sender; Discord doesn't surface it
+   *  simply — those show just a "Forwarded" marker with no origin. */
+  forwardedFrom?: string;
   /** Delivery state of an outgoing message in a private chat: "sent" (✓) or
    *  "read" (✓✓). Undefined for incoming messages and group/channel chats. */
   status?: "sent" | "read";

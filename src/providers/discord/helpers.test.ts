@@ -126,6 +126,11 @@ describe("toMessage", () => {
     expect(msg.entities).toEqual([{ type: "bold", offset: 0, length: 9 }]);
     // A forward is not a reply — no reply quote.
     expect(msg.reply).toBeUndefined();
+    expect(msg.forwarded).toBe(true);
+  });
+
+  it("does not mark a normal message as forwarded", () => {
+    expect(toMessage(base).forwarded).toBeUndefined();
   });
 
   it("falls back to embed text when content is empty (bot messages)", () => {

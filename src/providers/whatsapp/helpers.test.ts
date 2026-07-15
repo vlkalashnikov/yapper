@@ -4,6 +4,7 @@ import {
   chatTitle,
   isGroupJid,
   isRenderable,
+  isForwarded,
   extFromMime,
   isSupportedJid,
   jidUser,
@@ -333,5 +334,43 @@ describe("toMessage", () => {
     );
     expect(msg.senderId).toBe("999@s.whatsapp.net");
     expect(msg.author).toBe("999");
+  });
+});
+
+describe("isForwarded", () => {
+  it("detects the contextInfo.isForwarded flag on any content type", () => {
+    expect(
+      isForwarded(
+        wa({
+          message: { extendedTextMessage: { text: "hi", contextInfo: { isForwarded: true } } },
+        })
+      )
+    ).toBe(true);
+    expect(
+      isForwarded(
+        wa({ message: { imageMessage: { contextInfo: { isForwarded: true } } } })
+      )
+    ).toBe(true);
+  });
+
+  it("unwraps containers (ephemeral/viewOnce) before checking", () => {
+    expect(
+      isForwarded(
+        wa({
+          message: {
+            ephemeralMessage: {
+              message: { conversation: "x", extendedTextMessage: { contextInfo: { isForwarded: true } } },
+            },
+          },
+        })
+      )
+    ).toBe(true);
+  });
+
+  it("is false for a plain (non-forwarded) message", () => {
+    expect(isForwarded(wa({ message: { conversation: "hi" } }))).toBe(false);
+    expect(
+      isForwarded(wa({ message: { extendedTextMessage: { text: "hi", contextInfo: {} } } }))
+    ).toBe(false);
   });
 });

@@ -363,6 +363,14 @@ img.avatar.clickable-user:hover,
   text-overflow: ellipsis;
 }
 
+/* "↪ Forwarded" marker above a forwarded message's body. */
+.forwarded {
+  margin-bottom: 3px;
+  font-size: 0.8em;
+  font-style: italic;
+  color: var(--vscode-descriptionForeground);
+}
+
 /* Brief highlight when jumping to a message via a reply. */
 @keyframes flash {
   from {

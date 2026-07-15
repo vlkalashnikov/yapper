@@ -81,6 +81,8 @@
   "Reply:": "Ответ:",
   "Cancel": "Отменить",
   "edited": "изм.",
+  "Forwarded": "Переслано",
+  "Forwarded from {0}": "Переслано от {0}",
   "Go to message": "Перейти к сообщению",
   "Message": "Сообщение",
   "You": "Вы",
